@@ -1,26 +1,148 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------ */
+/* Fit-matik tasarım belirteçleri                                      */
+/* Zemin: derin petrol. Vurgu: kayısı (en iyi tahmin). Nane: yüksek    */
+/* güven. İmza öğe: kalori aralığı çubuğu.                             */
+/* ------------------------------------------------------------------ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink:        #0d181b;
+  --ink-2:      #101f23;
+  --surface:    #16292e;
+  --surface-2:  #1d353b;
+  --line:       #27454c;
+  --text:       #e9efec;
+  --muted:      #8fa8a9;
+  --faint:      #5f7a7d;
+  --apricot:    #f0a868;
+  --apricot-dim:#7a5334;
+  --mint:       #7fd1b9;
+  --rose:       #e0797c;
+  --radius:     14px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-apricot: var(--apricot);
+  --color-mint: var(--mint);
+  --color-rose: var(--rose);
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* { -webkit-tap-highlight-color: transparent; }
+
+html {
+  background: var(--ink);
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(120% 60% at 50% -10%, #14262b 0%, transparent 60%),
+    var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
 }
+
+@layer components {
+/* Sayı ve mikro etiketler mono ile — veri gibi okunsun */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.display { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.02em; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.hairline { border-color: var(--line); }
+
+button, input, textarea, select { font: inherit; color: inherit; }
+
+textarea, input[type="text"], input[type="password"], input[type="datetime-local"] {
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  width: 100%;
+  padding: 14px;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+textarea::placeholder, input::placeholder { color: var(--faint); }
+textarea:focus, input:focus {
+  border-color: var(--apricot);
+  box-shadow: 0 0 0 3px rgb(240 168 104 / 0.14);
+}
+
+:focus-visible { outline: 2px solid var(--apricot); outline-offset: 2px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 12px; padding: 14px 18px; font-weight: 600;
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform .12s ease, background .16s ease, border-color .16s ease, opacity .16s ease;
+}
+.btn:active:not(:disabled) { transform: scale(.985); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: var(--apricot); color: #24160a; }
+.btn-primary:hover:not(:disabled) { background: #f7b87e; }
+.btn-ghost { background: transparent; border-color: var(--line); color: var(--text); }
+.btn-ghost:hover:not(:disabled) { background: var(--surface-2); }
+.btn-quiet { background: transparent; color: var(--muted); padding: 8px 10px; border-radius: 10px; }
+.btn-quiet:hover:not(:disabled) { color: var(--text); background: var(--surface-2); }
+
+/* --- İmza öğe: kalori aralığı çubuğu ------------------------------- */
+.rangebar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: visible;
+}
+.rangebar__span {
+  position: absolute; inset-block: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2f6d68, var(--apricot));
+  opacity: .55;
+}
+.rangebar__pin {
+  position: absolute; top: 50%;
+  width: 3px; height: 18px; margin-top: -9px; margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--apricot);
+  box-shadow: 0 0 0 4px rgb(240 168 104 / .16);
+}
+}
+
+/* --- Yükleniyor: iki aşamalı boru hattını göster -------------------- */
+@keyframes fm-pulse { 0%,100% { opacity:.35 } 50% { opacity:1 } }
+@layer components { .pulse { animation: fm-pulse 1.4s ease-in-out infinite; } }
+@keyframes fm-rise { from { opacity:0; transform: translateY(8px) } to { opacity:1; transform:none } }
+@layer components { .rise { animation: fm-rise .32s cubic-bezier(.2,.7,.3,1) both; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* iOS güvenli alan */
+.safe-top { padding-top: max(14px, env(safe-area-inset-top)); }
+.safe-bottom { padding-bottom: max(18px, env(safe-area-inset-bottom)); }

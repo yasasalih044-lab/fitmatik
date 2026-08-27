@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Coolify/Docker için küçük, kendi kendine yeten sunucu çıktısı
+  output: "standalone",
 };
 
 export default nextConfig;

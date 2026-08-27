@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fit-matik
 
-## Getting Started
+Ne yediğini yaz ya da paketli bir ürünün fotoğrafını çek; Fit-matik kalorisini
+araştırıp günlüğüne yazar. iPhone'da Safari ana ekran kısayolu olarak kullanılmak
+üzere tasarlandı.
 
-First, run the development server:
+## Nasıl çalışır
+
+İki aşamalı bir boru hattı:
+
+1. **Ayrıştırma** — `gpt-5-mini`, serbest metni ya da etiket fotoğrafını yapılandırılmış
+   yemek kalemlerine çevirir (ad, miktar, marka, etiket besin değerleri).
+   Fotoğraf modunda **yalnızca paketli gıda** kabul edilir; tabak yemeği reddedilir.
+2. **Araştırma** — aynı model, web arama aracıyla her kalemin kalorisini internetten
+   toplar, kaynakların söylediği **aralığı** ve tek bir en iyi tahmini üretir:
+   *"188-245 arası söyleniyor ama büyük ihtimalle 213 kalori"*.
+
+Sonuç Supabase'e yazılır, `/dashboard`'da gün gün görünür.
+
+## Sayfalar
+
+| Yol | İş |
+|---|---|
+| `/upload` | Kayıt ekle — yazı veya paket fotoğrafı |
+| `/dashboard` | Günlük: bugünün toplamı, son 14 gün, kayıt dökümü |
+| `/login` | `APP_PIN` tanımlıysa PIN ekranı |
+| `/api/health` | Yapılandırma durumu (anahtar, Supabase, PIN) |
+
+## Kurulum
 
 ```bash
+npm install
+cp .env.example .env.local   # değerleri doldur
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`supabase/schema.sql` dosyasını Supabase panelindeki **SQL Editor**'de çalıştır.
+`entries` tablosunu, indeksini ve görseller için `fitmatik` storage kovasını oluşturur.
+Uygulama sunucu tarafında `service_role` anahtarıyla yazar; RLS açıktır ve politika
+tanımlı değildir, yani anon anahtarla dışarıdan erişilemez.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Ortam değişkenleri
 
-## Learn More
+| Değişken | Zorunlu | Açıklama |
+|---|---|---|
+| `OPENAI_API_KEY` | evet | OpenAI anahtarı |
+| `OPENAI_MODEL` | hayır | Varsayılan `gpt-5-mini` |
+| `SUPABASE_URL` | evet | Proje URL'i |
+| `SUPABASE_SERVICE_ROLE_KEY` | evet | Service role anahtarı — asla istemciye gitmez |
+| `SUPABASE_BUCKET` | hayır | Varsayılan `fitmatik` |
+| `APP_PIN` | hayır | Boşsa site herkese açık olur |
+| `APP_SECRET` | hayır | PIN çerezi için tuz |
 
-To learn more about Next.js, take a look at the following resources:
+Supabase tanımlı değilse uygulama çalışır ama kayıtları yalnızca bellekte tutar ve
+arayüzde bunu söyleyen bir uyarı gösterir.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Dağıtım
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`Dockerfile` Next.js standalone çıktısı üretir, 3000 portunu dinler. Coolify'da
+build pack `dockerfile`, expose port `3000`, ortam değişkenleri yukarıdaki tablodan.
 
-## Deploy on Vercel
+## iPhone kısayolu
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Safari'de siteyi aç → Paylaş → **Ana Ekrana Ekle**. Uygulama tam ekran açılır,
+`/upload` başlangıç sayfasıdır.
