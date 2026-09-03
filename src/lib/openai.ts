@@ -210,6 +210,7 @@ Kurallar:
 - grams_est: tüketilen miktarın gram karşılığı. Türkiye'deki tipik porsiyonlara göre tahmin et (1 dilim ekmek ~30 g, 1 orta yumurta ~50 g, 1 bardak süt ~200 ml). Bilemiyorsan null.
 - barcode: kullanıcı metinde barkod numarası yazdıysa yaz, yoksa null.
 - title: tüm öğünün kısa Türkçe özeti, en fazla 6 kelime.
+- Kullanıcı ürün adı yerine SADECE bir barkod numarası yazdıysa bu GEÇERLİ bir kalemdir; reddetme. accepted=true, name="Barkodlu ürün", packaged=true, barcode=<rakamlar>, db_query="" yap. Ürünü bir sonraki adım veritabanından çözecek.
 - Metin yiyecek/içecek içermiyorsa accepted=false ve reject_reason'a Türkçe kısa açıklama yaz.
 - Yalnızca JSON döndür.`;
 
