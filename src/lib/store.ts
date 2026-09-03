@@ -244,7 +244,14 @@ function normalize(e: Entry): Entry {
   };
   return {
     ...e,
-    items: Array.isArray(e.items) ? e.items : [],
+    items: (Array.isArray(e.items) ? e.items : []).map((i) => ({
+      ...i,
+      grams: num((i as { grams?: unknown }).grams),
+      protein_g: num((i as { protein_g?: unknown }).protein_g),
+      carbs_g: num((i as { carbs_g?: unknown }).carbs_g),
+      fat_g: num((i as { fat_g?: unknown }).fat_g),
+      barcode: (i as { barcode?: string | null }).barcode ?? null,
+    })),
     sources: Array.isArray(e.sources) ? e.sources : [],
     kcal_min: int(e.kcal_min),
     kcal_max: int(e.kcal_max),

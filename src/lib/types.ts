@@ -1,5 +1,8 @@
 export type Source = "text" | "image";
 
+/** Bir kalemin sayıları nereden geldi — kullanıcı güvenini buna göre ayarlasın. */
+export type Basis = "etiket" | "barkod" | "veritabani" | "web" | "tahmin";
+
 export type FoodItem = {
   /** Yemeğin adı, Türkçe. Paketli üründe marka + ürün adı. */
   name: string;
@@ -12,6 +15,14 @@ export type FoodItem = {
   kcal_min: number;
   kcal_max: number;
   kcal_best: number;
+  /** Tüketilen miktarın gram karşılığı (biliniyorsa) */
+  grams: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  basis: Basis;
+  /** Open Food Facts'te eşleşen ürünün barkodu */
+  barcode: string | null;
   /** Bu kalem için kısa not / nereden geldiği */
   note: string;
 };

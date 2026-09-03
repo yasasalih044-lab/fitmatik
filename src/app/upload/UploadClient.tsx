@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import RangeBar from "@/components/RangeBar";
+import ItemLines from "@/components/ItemLines";
 import { confidenceLabel, kcal, todayKey, dayKey } from "@/lib/format";
 import type { AnalyzeResult, Entry } from "@/lib/types";
 
@@ -314,22 +315,7 @@ function ResultCard({
         <p className="text-[15px] leading-snug text-[var(--ink)]">{result.verdict}</p>
       </div>
 
-      {result.items.length > 0 && (
-        <ul className="divide-y divide-[var(--rule)]">
-          {result.items.map((it, i) => (
-            <li key={i} className="flex items-start justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-[14px]">{it.name}</p>
-                <p className="mt-0.5 text-[12px] text-[var(--faint)]">
-                  {it.qty}
-                  {it.note ? ` · ${it.note}` : ""}
-                </p>
-              </div>
-              <p className="mono shrink-0 text-[14px] text-[var(--ink)]">{kcal(it.kcal_best)}</p>
-            </li>
-          ))}
-        </ul>
-      )}
+      {result.items.length > 0 && <ItemLines items={result.items} />}
 
       {(result.macros.protein_g !== null || result.macros.carbs_g !== null || result.macros.fat_g !== null) && (
         <div className="grid grid-cols-3 divide-x divide-[var(--rule)]">
@@ -340,7 +326,7 @@ function ResultCard({
           ] as const).map(([label, v]) => (
             <div key={label} className="px-3 py-3 text-center">
               <p className="eyebrow">{label}</p>
-              <p className="mono mt-1 text-[15px]">{v === null ? "—" : `${Math.round(v)} g`}</p>
+              <p className="mono mt-1 text-[15px]">{v === null ? "—" : `${(Math.round(v * 10) / 10).toLocaleString("tr-TR")} g`}</p>
             </div>
           ))}
         </div>

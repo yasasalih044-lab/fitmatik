@@ -3,8 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import RangeBar from "@/components/RangeBar";
+import ItemLines from "@/components/ItemLines";
 import { confidenceLabel, dayKey, dayLabel, kcal, timeLabel, todayKey } from "@/lib/format";
 import type { Entry } from "@/lib/types";
+
+const gram = (v: number | null) =>
+  v === null ? "—" : `${(Math.round(v * 10) / 10).toLocaleString("tr-TR")} g`;
 
 type Day = { key: string; entries: Entry[]; best: number; min: number; max: number };
 
@@ -204,16 +208,18 @@ function EntryRow({ entry, scaleMax, open, onToggle, onDelete }: { entry: Entry;
           )}
           {entry.raw_input && <p className="text-[12px] italic text-[var(--faint)]">“{entry.raw_input}”</p>}
 
-          <ul className="space-y-1">
-            {entry.items.map((it, i) => (
-              <li key={i} className="flex justify-between gap-3 text-[12px]">
-                <span className="min-w-0 truncate text-[var(--muted)]">
-                  {it.name} · {it.qty}
-                </span>
-                <span className="mono shrink-0 text-[var(--muted)]">{kcal(it.kcal_best)}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="-mx-4 border-y border-[var(--rule)] bg-[var(--card)]">
+            <ItemLines items={entry.items} />
+          </div>
+
+          {(entry.protein_g !== null || entry.carbs_g !== null || entry.fat_g !== null) && (
+            <div className="mono flex gap-4 text-[11px] text-[var(--muted)]">
+              <span><span className="text-[var(--faint)]">Toplam</span></span>
+              <span><span className="text-[var(--faint)]">P</span> {gram(entry.protein_g)}</span>
+              <span><span className="text-[var(--faint)]">K</span> {gram(entry.carbs_g)}</span>
+              <span><span className="text-[var(--faint)]">Y</span> {gram(entry.fat_g)}</span>
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-1">
             <span className="eyebrow">

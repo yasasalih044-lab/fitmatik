@@ -11,9 +11,19 @@ araştırıp günlüğüne yazar. iPhone'da Safari ana ekran kısayolu olarak ku
 1. **Ayrıştırma** — `gpt-5-mini`, serbest metni ya da etiket fotoğrafını yapılandırılmış
    yemek kalemlerine çevirir (ad, miktar, marka, etiket besin değerleri).
    Fotoğraf modunda **yalnızca paketli gıda** kabul edilir; tabak yemeği reddedilir.
-2. **Araştırma** — aynı model, web arama aracıyla her kalemin kalorisini internetten
+2. **Veritabanı eşleştirme** — paketli/markalı kalemler **Open Food Facts**'te aranır.
+   Barkod varsa doğrudan o ürün çekilir (en güvenilir yol). Eşleştirme kasten katıdır:
+   ürün adında bilmediğimiz ayırt edici bir kelime varsa ("Gong" ararken "Gong Pops")
+   eşleşme sayılmaz — yanlış ürünü "veritabanı" damgasıyla sunmak, web tahmininden
+   daha yanıltıcı olur.
+3. **Araştırma** — aynı model, web arama aracıyla her kalemin kalorisini internetten
    toplar, kaynakların söylediği **aralığı** ve tek bir en iyi tahmini üretir:
-   *"188-245 arası söyleniyor ama büyük ihtimalle 213 kalori"*.
+   *"188-245 arası söyleniyor ama büyük ihtimalle 213 kalori"*. Veritabanı eşleşmesi
+   varsa o bağlayıcıdır, web'i ezer.
+
+Aritmetik modele bırakılmaz: **model porsiyonu tahmin eder, veritabanı/etiket 100 g
+başına değeri verir, çarpmayı kod yapar.** Her kalemin yanında sayının nereden geldiği
+yazar — `ETİKET` · `BARKOD` · `VERİTABANI` · `WEB` · `TAHMİN`.
 
 Sonuç Supabase'e yazılır, `/dashboard`'da gün gün görünür.
 

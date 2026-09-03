@@ -83,7 +83,12 @@ export async function POST(req: Request) {
     }
     const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
     console.error("[fitmatik] analyze:", msg);
-    return NextResponse.json({ error: "Kalori hesaplandı ama günlüğe yazılamadı. Tekrar dene." }, { status: 500 });
+    // Depolama hataları kullanıcıya farklı bir şey anlatır: hesap yapıldı ama kaydedilemedi.
+    const isStore = /Kayıt (yazılamadı|silinemedi)|Kayıtlar (okunamadı|listelenemedi)/.test(msg);
+    return NextResponse.json(
+      { error: isStore ? "Kalori hesaplandı ama günlüğe yazılamadı. Tekrar dene." : "Hesaplama sırasında bir hata oldu. Tekrar dene." },
+      { status: 500 },
+    );
   }
 }
 
@@ -92,16 +97,16 @@ const MOCK: AnalyzeResult = {
   title: "Kahvaltı: ekmek, yumurta, çay",
   source: "text" as const,
   items: [
-    { name: "Beyaz ekmek", qty: "2 dilim (~50 g)", brand: null, packaged: false, kcal_min: 120, kcal_max: 160, kcal_best: 133, note: "kaynak ortalaması" },
-    { name: "Haşlanmış yumurta", qty: "1 adet (50 g)", brand: null, packaged: false, kcal_min: 68, kcal_max: 80, kcal_best: 78, note: "USDA" },
-    { name: "Siyah çay (şekersiz)", qty: "1 ince belli bardak", brand: null, packaged: false, kcal_min: 0, kcal_max: 5, kcal_best: 2, note: "ihmal edilebilir" },
+    { name: "Eti Gong Çikolatalı", qty: "1 paket (36 g)", brand: "Eti", packaged: true, kcal_min: 182, kcal_max: 194, kcal_best: 188, grams: 36, protein_g: 2.3, carbs_g: 22.7, fat_g: 9.8, basis: "barkod", barcode: "8690526025001", note: "Eti Gong: 522 kcal/100 g × 36 g" },
+    { name: "Beyaz ekmek", qty: "2 dilim (~50 g)", brand: null, packaged: false, kcal_min: 120, kcal_max: 160, kcal_best: 133, grams: 50, protein_g: 4.2, carbs_g: 25.5, fat_g: 0.8, basis: "web", barcode: null, note: "kaynak ortalaması" },
+    { name: "Siyah çay (şekersiz)", qty: "1 ince belli bardak", brand: null, packaged: false, kcal_min: 0, kcal_max: 5, kcal_best: 2, grams: 200, protein_g: 0, carbs_g: 0.3, fat_g: 0, basis: "tahmin", barcode: null, note: "ihmal edilebilir" },
   ],
-  kcal_min: 188,
-  kcal_max: 245,
-  kcal_best: 213,
-  macros: { protein_g: 12.4, carbs_g: 26.1, fat_g: 6.8 },
+  kcal_min: 302,
+  kcal_max: 359,
+  kcal_best: 323,
+  macros: { protein_g: 6.5, carbs_g: 48.5, fat_g: 10.6 },
   confidence: "medium" as const,
-  verdict: "188-245 arası söyleniyor ama büyük ihtimalle 213 kalori",
+  verdict: "302-359 arası söyleniyor ama büyük ihtimalle 323 kalori",
   sources: [
     { title: "Diyetkolik — Ekmek kaç kalori", url: "https://www.diyetkolik.com/kac-kalori/ekmek/" },
     { title: "FatSecret — Haşlanmış yumurta", url: "https://www.fatsecret.com.tr/kalori-besin/genel/yumurta-haslanmis" },
