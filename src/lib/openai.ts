@@ -593,6 +593,20 @@ function band(kcal: number) {
 
 const BASIS_RANK: Record<Basis, number> = { etiket: 4, barkod: 4, veritabani: 3, web: 2, tahmin: 1 };
 
+/**
+ * Karar cümlesini koddan üret. Modelin cümlesi kendi ara sayılarına dayanıyor;
+ * biz toplamları kalemlerden yeniden hesapladığımız için ikisi tutmayabiliyor
+ * ("225-225 arası söyleniyor" gibi). Ekrandaki sayı, çubuk ve cümle aynı
+ * kaynaktan gelsin.
+ */
+function buildVerdict(items: FoodItem[], min: number, max: number, best: number): string {
+  if (!items.length) return `Yaklaşık ${best} kalori.`;
+  const strong = items.every((i) => i.basis === "etiket" || i.basis === "barkod");
+  if (strong) return `Ambalajın kendi besin değerlerine göre ${best} kalori.`;
+  if (max - min < 5) return `Yaklaşık ${best} kalori.`;
+  return `${min}-${max} arası söyleniyor ama büyük ihtimalle ${best} kalori.`;
+}
+
 export async function analyzeMeal(opts: { source: Source; text?: string; imageDataUrl?: string }): Promise<AnalyzeResult> {
   const started = Date.now();
 
@@ -658,7 +672,7 @@ export async function analyzeMeal(opts: { source: Source; text?: string; imageDa
     kcal_best,
     macros: { protein_g: sumMacro("protein_g"), carbs_g: sumMacro("carbs_g"), fat_g: sumMacro("fat_g") },
     confidence,
-    verdict: out.verdict || `${kcal_min}-${kcal_max} arası söyleniyor ama büyük ihtimalle ${kcal_best} kalori`,
+    verdict: buildVerdict(items, kcal_min, kcal_max, kcal_best),
     sources: dedupeSources(dbSources, out.sources || [], citations),
     model: MODEL,
     elapsed_ms: Date.now() - started,
