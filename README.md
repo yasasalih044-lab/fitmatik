@@ -36,10 +36,21 @@ npm run dev
 
 ### Supabase
 
-`supabase/schema.sql` dosyasını Supabase panelindeki **SQL Editor**'de çalıştır.
-`entries` tablosunu, indeksini ve görseller için `fitmatik` storage kovasını oluşturur.
-Uygulama sunucu tarafında `service_role` anahtarıyla yazar; RLS açıktır ve politika
-tanımlı değildir, yani anon anahtarla dışarıdan erişilemez.
+Uygulama iki depolama biçiminden birini **kendisi seçer**:
+
+1. **Tablo** (tercih edilen) — `supabase/schema.sql` dosyasını Supabase panelindeki
+   **SQL Editor**'de çalıştırırsan `public.entries` tablosu oluşur ve uygulama ona yazar.
+2. **Storage** (yedek) — tablo yoksa kayıtlar `fitmatik` kovasına
+   `log/<gün>/<id>.json` yolunda birer dosya olarak yazılır. Kayıt başına tek dosya
+   kullanılır: nesne depoları üzerine yazmada bayat okuma dönebildiği için
+   oku‑değiştir‑yaz deseni araya giren kayıtları sessizce kaybederdi.
+
+Hangisinin etkin olduğunu `/api/health` içindeki `store` alanı söyler. Tablo sonradan
+açılırsa uygulama bir dakika içinde kendiliğinden ona geçer (eski Storage kayıtları
+taşınmaz). Uygulama sunucu tarafında `service_role` anahtarıyla yazar; RLS açıktır ve
+politika tanımlı değildir, yani anon anahtarla dışarıdan erişilemez.
+
+Kova `application/json` MIME tipine izin vermelidir (Storage sürücüsü için).
 
 ### Ortam değişkenleri
 
@@ -55,6 +66,12 @@ tanımlı değildir, yani anon anahtarla dışarıdan erişilemez.
 
 Supabase tanımlı değilse uygulama çalışır ama kayıtları yalnızca bellekte tutar ve
 arayüzde bunu söyleyen bir uyarı gösterir.
+
+## Görünüm
+
+Kağıt zemin, mürekkep siyahı metin, sinyal kırmızısı vurgu. Her sayfa açılışında
+`public/motif/` içindeki dövme motiflerinden biri köşede beliriyor (WebP, ~58 KB,
+tembel yüklenir, `pointer-events: none`).
 
 ## Dağıtım
 

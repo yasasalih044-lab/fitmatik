@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE, expectedToken, pinRequired } from "@/lib/auth";
 
-const PUBLIC = ["/login", "/api/auth", "/api/health", "/manifest.webmanifest", "/icon.svg", "/apple-icon.png"];
+const PUBLIC = ["/login", "/api/auth", "/api/health", "/manifest.webmanifest", "/icon", "/apple-icon", "/favicon.ico", "/motif"];
 
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

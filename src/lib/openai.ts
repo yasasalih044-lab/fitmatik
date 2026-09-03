@@ -425,7 +425,7 @@ export async function analyzeMeal(opts: { source: Source; text?: string; imageDa
   let kcal_max = items.length ? sumMax : r0(out.kcal_max);
   let kcal_best = items.length ? sumBest : r0(out.kcal_best);
   if (kcal_max < kcal_min) [kcal_min, kcal_max] = [kcal_max, kcal_min];
-  kcal_best = Math.min(Math.max(kcal_best, kcal_min), kcal_max || kcal_best);
+  kcal_best = Math.min(Math.max(kcal_best, kcal_min), kcal_max);
 
   return {
     title: parsed.title || items[0]?.name || "Öğün",

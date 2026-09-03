@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Instrument_Sans, JetBrains_Mono } from "next/font/google";
+import { Big_Shoulders, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const bricolage = Bricolage_Grotesque({
-  variable: "--font-bricolage",
+const shoulders = Big_Shoulders({
+  variable: "--font-shoulders",
   subsets: ["latin", "latin-ext"],
+  weight: ["600", "700", "800"],
   display: "swap",
 });
 const instrument = Instrument_Sans({
@@ -22,23 +23,22 @@ export const metadata: Metadata = {
   title: "Fit-matik",
   description: "Ne yediğini yaz ya da paketin fotoğrafını çek — kalorisini araştırıp günlüğüne yazsın.",
   applicationName: "Fit-matik",
-  appleWebApp: { capable: true, title: "Fit-matik", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Fit-matik", statusBarStyle: "default" },
   manifest: "/manifest.webmanifest",
   formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0d181b",
+  themeColor: "#f2eee5",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
-      <body className={`${bricolage.variable} ${instrument.variable} ${jetbrains.variable}`}>{children}</body>
+      <body className={`${shoulders.variable} ${instrument.variable} ${jetbrains.variable}`}>{children}</body>
     </html>
   );
 }

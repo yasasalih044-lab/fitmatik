@@ -56,7 +56,12 @@ export default function UploadClient() {
 
   async function refreshToday() {
     try {
-      const res = await fetch("/api/entries?limit=200", { cache: "no-store" });
+      // Yalnızca bugünü iste — depolama sürücüsünde iş yükünü sınırlar.
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const res = await fetch(`/api/entries?from=${encodeURIComponent(start.toISOString())}&limit=100`, {
+        cache: "no-store",
+      });
       if (!res.ok) return;
       const { entries } = (await res.json()) as { entries: Entry[] };
       const today = todayKey();
@@ -91,15 +96,24 @@ export default function UploadClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: mode, text, image: mode === "image" ? image : undefined }),
+        signal: AbortSignal.timeout(280_000),
       });
-      const data = (await res.json()) as { result?: AnalyzeResult; entry?: Entry | null; error?: string };
+      // Ara katman HTML hata sayfası döndürebilir; res.json() tek başına güvenli değil.
+      const raw = await res.text();
+      let data: { result?: AnalyzeResult; entry?: Entry | null; error?: string } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(`Sunucudan beklenmeyen yanıt geldi (${res.status}).`);
+      }
       if (!res.ok) throw new Error(data.error || `İstek başarısız (${res.status}).`);
       setResult(data.result!);
       setEntry(data.entry ?? null);
       if (data.entry) void refreshToday();
       requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Bir şeyler ters gitti.");
+      const isTimeout = e instanceof DOMException && e.name === "TimeoutError";
+      setError(isTimeout ? "Araştırma çok uzun sürdü, tekrar dene." : e instanceof Error ? e.message : "Bir şeyler ters gitti.");
     } finally {
       clearTimeout(toResearch);
       setPhase("idle");
@@ -108,7 +122,11 @@ export default function UploadClient() {
 
   async function removeEntry() {
     if (!entry) return;
-    await fetch(`/api/entries?id=${entry.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/entries?id=${entry.id}&day=${entry.eaten_at.slice(0, 10)}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError("Kayıt silinemedi. Günlük sekmesinden tekrar dene.");
+      return;
+    }
     reset();
     void refreshToday();
   }
@@ -134,7 +152,7 @@ export default function UploadClient() {
         </p>
       </div>
 
-      <div className="flex gap-1 rounded-xl border border-[var(--line)] bg-[var(--ink-2)] p-1">
+      <div className="flex gap-1 rounded-md border border-[var(--rule)] bg-[var(--sunk)] p-1">
         {([
           ["text", "Yazıyla"],
           ["image", "Paket fotoğrafı"],
@@ -143,8 +161,8 @@ export default function UploadClient() {
             key={m}
             onClick={() => setMode(m)}
             disabled={busy}
-            className={`btn flex-1 py-2.5 text-sm ${
-              mode === m ? "bg-[var(--surface-2)] text-[var(--text)]" : "text-[var(--faint)]"
+            className={`btn flex-1 rounded-[5px] py-2.5 text-sm ${
+              mode === m ? "bg-[var(--ink)] text-[var(--paper)]" : "text-[var(--muted)]"
             }`}
           >
             {label}
@@ -181,8 +199,8 @@ export default function UploadClient() {
           {image ? (
             <div className="card overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image} alt="Yüklenen paket fotoğrafı" className="max-h-64 w-full object-contain bg-[var(--ink-2)]" />
-              <div className="flex items-center justify-between border-t border-[var(--line)] px-3 py-2">
+              <img src={image} alt="Yüklenen paket fotoğrafı" className="max-h-64 w-full object-contain bg-[var(--sunk)]" />
+              <div className="flex items-center justify-between border-t border-[var(--rule)] px-3 py-2">
                 <span className="eyebrow">Fotoğraf hazır</span>
                 <button onClick={() => fileRef.current?.click()} disabled={busy} className="btn btn-quiet text-[12px]">
                   Değiştir
@@ -224,8 +242,8 @@ export default function UploadClient() {
       )}
 
       {error && (
-        <div className="rise rounded-[14px] border border-[var(--rose)]/40 bg-[var(--rose)]/10 p-4">
-          <p className="eyebrow mb-1 text-[var(--rose)]">Olmadı</p>
+        <div className="rise rounded-[14px] border border-[var(--red)]/40 bg-[var(--red)]/10 p-4">
+          <p className="eyebrow mb-1 text-[var(--red)]">Olmadı</p>
           <p className="text-[14px] leading-snug">{error}</p>
         </div>
       )}
@@ -254,10 +272,10 @@ function Step({ active, done, label }: { active: boolean; done: boolean; label: 
     <div className="flex items-center gap-2.5">
       <span
         className={`h-1.5 w-1.5 rounded-full ${
-          done ? "bg-[var(--mint)]" : active ? "bg-[var(--apricot)] pulse" : "bg-[var(--line)]"
+          done ? "bg-[var(--red-ink)]" : active ? "bg-[var(--ink)] pulse" : "bg-[var(--rule)]"
         }`}
       />
-      <span className={`text-[13px] ${active ? "text-[var(--text)]" : done ? "text-[var(--muted)]" : "text-[var(--faint)]"}`}>
+      <span className={`text-[13px] ${active ? "text-[var(--ink)]" : done ? "text-[var(--muted)]" : "text-[var(--faint)]"}`}>
         {label}
       </span>
     </div>
@@ -276,28 +294,28 @@ function ResultCard({
   onNew: () => void;
 }) {
   return (
-    <div className="card rise divide-y divide-[var(--line)]">
+    <div className="card rise divide-y divide-[var(--rule)]">
       <div className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="eyebrow">{result.title}</p>
-            <p className="display mt-1 text-[40px] leading-none">
+            <p className="figure mt-1.5 text-[54px]">
               {kcal(result.kcal_best)}
-              <span className="mono ml-1.5 text-[13px] font-normal text-[var(--muted)]">kcal</span>
+              <span className="mono ml-2 align-top text-[12px] font-normal text-[var(--muted)]">kcal</span>
             </p>
           </div>
-          <span className="eyebrow rounded-full border border-[var(--line)] px-2 py-1">
+          <span className="eyebrow rounded-full border border-[var(--rule)] px-2 py-1">
             {confidenceLabel(result.confidence)}
           </span>
         </div>
 
         <RangeBar min={result.kcal_min} max={result.kcal_max} best={result.kcal_best} />
 
-        <p className="text-[15px] leading-snug text-[var(--text)]">{result.verdict}</p>
+        <p className="text-[15px] leading-snug text-[var(--ink)]">{result.verdict}</p>
       </div>
 
       {result.items.length > 0 && (
-        <ul className="divide-y divide-[var(--line)]">
+        <ul className="divide-y divide-[var(--rule)]">
           {result.items.map((it, i) => (
             <li key={i} className="flex items-start justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
@@ -307,14 +325,14 @@ function ResultCard({
                   {it.note ? ` · ${it.note}` : ""}
                 </p>
               </div>
-              <p className="mono shrink-0 text-[14px] text-[var(--apricot)]">{kcal(it.kcal_best)}</p>
+              <p className="mono shrink-0 text-[14px] text-[var(--ink)]">{kcal(it.kcal_best)}</p>
             </li>
           ))}
         </ul>
       )}
 
       {(result.macros.protein_g !== null || result.macros.carbs_g !== null || result.macros.fat_g !== null) && (
-        <div className="grid grid-cols-3 divide-x divide-[var(--line)]">
+        <div className="grid grid-cols-3 divide-x divide-[var(--rule)]">
           {([
             ["Protein", result.macros.protein_g],
             ["Karbonhidrat", result.macros.carbs_g],
@@ -337,7 +355,7 @@ function ResultCard({
               href={s.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="block truncate text-[12px] text-[var(--mint)] underline underline-offset-2"
+              className="block truncate text-[12px] text-[var(--red-ink)] underline underline-offset-2"
             >
               {s.title}
             </a>

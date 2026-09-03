@@ -18,6 +18,10 @@ export async function POST(req: Request) {
   }
 
   const source: Source = body.source === "image" ? "image" : "text";
+  const eatenAt = body.eaten_at ? new Date(body.eaten_at) : new Date();
+  if (Number.isNaN(eatenAt.getTime())) {
+    return NextResponse.json({ error: "Geçersiz tarih." }, { status: 400 });
+  }
   const text = (body.text || "").trim();
   const image = body.image || "";
 
@@ -44,10 +48,9 @@ export async function POST(req: Request) {
     }
 
     const image_url = source === "image" ? await uploadImage(image) : null;
-    const eaten_at = body.eaten_at ? new Date(body.eaten_at).toISOString() : new Date().toISOString();
 
     const entry = await insertEntry({
-      eaten_at,
+      eaten_at: eatenAt.toISOString(),
       source,
       raw_input: text || null,
       image_url,
@@ -80,7 +83,7 @@ export async function POST(req: Request) {
     }
     const msg = e instanceof Error ? e.message : "Bilinmeyen hata";
     console.error("[fitmatik] analyze:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: "Kalori hesaplandı ama günlüğe yazılamadı. Tekrar dene." }, { status: 500 });
   }
 }
 

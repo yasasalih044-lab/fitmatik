@@ -15,7 +15,7 @@ export default function Icon() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0d181b",
+          background: "#f2eee5",
         }}
       >
         <div style={{ display: "flex", position: "relative", width: 320, height: 44 }}>
@@ -24,7 +24,7 @@ export default function Icon() {
               width: "100%",
               height: "100%",
               borderRadius: 999,
-              background: "linear-gradient(90deg, #2f6d68, #f0a868)",
+              background: "#d2141f",
               opacity: 0.6,
             }}
           />
@@ -36,7 +36,7 @@ export default function Icon() {
               width: 18,
               height: 88,
               borderRadius: 9,
-              background: "#f0a868",
+              background: "#17140f",
             }}
           />
         </div>

@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 function LoginForm() {
   const router = useRouter();
-  const next = useSearchParams().get("next") || "/upload";
+  const raw = useSearchParams().get("next") || "/upload";
+  // Yalnızca site içi yollara dön — "//evil.com" gibi değerler dışarı yönlendirir.
+  const next = /^\/(?!\/)/.test(raw) ? raw : "/upload";
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,7 +34,7 @@ function LoginForm() {
   return (
     <form onSubmit={submit} className="w-full max-w-[320px] space-y-4">
       <div className="flex items-center gap-2">
-        <span className="block h-4 w-1 rounded-sm bg-[var(--apricot)]" />
+        <span className="block h-4 w-1 rounded-sm bg-[var(--ink)]" />
         <span className="display text-[19px]">Fit-matik</span>
       </div>
       <p className="text-[13px] leading-snug text-[var(--muted)]">Günlüğüne girmek için PIN'i yaz.</p>
@@ -45,7 +47,7 @@ function LoginForm() {
         placeholder="••••"
         className="mono text-center text-[18px] tracking-[0.3em]"
       />
-      {error && <p className="text-[13px] text-[var(--rose)]">{error}</p>}
+      {error && <p className="text-[13px] text-[var(--red)]">{error}</p>}
       <button type="submit" disabled={busy || !pin} className="btn btn-primary w-full">
         {busy ? "Kontrol ediliyor…" : "Gir"}
       </button>

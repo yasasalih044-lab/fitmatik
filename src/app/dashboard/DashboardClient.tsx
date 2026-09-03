@@ -19,7 +19,13 @@ export default function DashboardClient() {
 
   async function load() {
     try {
-      const res = await fetch("/api/entries?limit=500", { cache: "no-store" });
+      // Son 60 günü iste; panelde gösterilen her şeyi kapsar, iş yükünü sınırlar.
+      const from = new Date();
+      from.setDate(from.getDate() - 60);
+      from.setHours(0, 0, 0, 0);
+      const res = await fetch(`/api/entries?from=${encodeURIComponent(from.toISOString())}&limit=400`, {
+        cache: "no-store",
+      });
       const data = (await res.json()) as { entries?: Entry[]; error?: string };
       if (!res.ok) throw new Error(data.error || "Kayıtlar okunamadı.");
       setEntries(data.entries || []);
@@ -29,9 +35,14 @@ export default function DashboardClient() {
     }
   }
 
-  async function remove(id: string) {
+  async function remove(id: string, eatenAt: string) {
+    const before = entries;
     setEntries((prev) => (prev ? prev.filter((e) => e.id !== id) : prev));
-    await fetch(`/api/entries?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/entries?id=${id}&day=${eatenAt.slice(0, 10)}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      setEntries(before); // silme başarısız — satırı geri koy
+      setError("Kayıt silinemedi.");
+    }
   }
 
   const days: Day[] = useMemo(() => {
@@ -74,9 +85,9 @@ export default function DashboardClient() {
               {today ? `${today.entries.length} kayıt` : "kayıt yok"}
             </p>
           </div>
-          <p className="display text-[46px] leading-none">
+          <p className="figure text-[62px]">
             {kcal(today?.best ?? 0)}
-            <span className="mono ml-2 text-[13px] font-normal text-[var(--muted)]">kcal</span>
+            <span className="mono ml-2 align-top text-[12px] font-normal text-[var(--muted)]">kcal</span>
           </p>
           <RangeBar
             min={today?.min ?? 0}
@@ -100,7 +111,7 @@ export default function DashboardClient() {
         )}
       </section>
 
-      {error && <p className="text-[13px] text-[var(--rose)]">{error}</p>}
+      {error && <p className="text-[13px] text-[var(--red)]">{error}</p>}
 
       <section className="space-y-2.5">
         <p className="eyebrow">Son 14 gün</p>
@@ -110,7 +121,7 @@ export default function DashboardClient() {
               <div className="flex w-full flex-1 items-end">
                 <div
                   className={`w-full rounded-t-[3px] ${
-                    d.key === todayKey() ? "bg-[var(--apricot)]" : d.best ? "bg-[var(--surface-2)]" : "bg-[var(--ink-2)]"
+                    d.key === todayKey() ? "bg-[var(--red)]" : d.best ? "bg-[var(--ink)]/25" : "bg-[var(--sunk)]"
                   }`}
                   style={{ height: `${Math.max(2, (d.best / peak) * 100)}%` }}
                   title={`${dayLabel(d.key)} · ${kcal(d.best)} kcal`}
@@ -148,13 +159,13 @@ function DayList({
   setOpen,
 }: {
   day: Day;
-  onDelete: (id: string) => void;
+  onDelete: (id: string, eatenAt: string) => void;
   open: string | null;
   setOpen: (v: string | null) => void;
 }) {
   const scale = Math.max(1, ...day.entries.map((e) => e.kcal_max));
   return (
-    <div className="card divide-y divide-[var(--line)]">
+    <div className="card divide-y divide-[var(--rule)]">
       {day.entries.map((e) => (
         <EntryRow
           key={e.id}
@@ -162,7 +173,7 @@ function DayList({
           scaleMax={scale}
           open={open === e.id}
           onToggle={() => setOpen(open === e.id ? null : e.id)}
-          onDelete={() => onDelete(e.id)}
+          onDelete={() => onDelete(e.id, e.eaten_at)}
         />
       ))}
     </div>
@@ -180,16 +191,16 @@ function EntryRow({ entry, scaleMax, open, onToggle, onDelete }: { entry: Entry;
             <RangeBar min={entry.kcal_min} max={entry.kcal_max} best={entry.kcal_best} scaleMax={scaleMax} compact />
           </span>
         </span>
-        <span className="mono shrink-0 text-[15px] text-[var(--apricot)]">{kcal(entry.kcal_best)}</span>
+        <span className="mono shrink-0 text-[15px] text-[var(--ink)]">{kcal(entry.kcal_best)}</span>
       </button>
 
       {open && (
-        <div className="rise space-y-3 border-t border-[var(--line)] bg-[var(--ink-2)] px-4 py-3">
+        <div className="rise space-y-3 border-t border-[var(--rule)] bg-[var(--sunk)] px-4 py-3">
           <p className="text-[13px] leading-snug">{entry.verdict}</p>
 
           {entry.image_url && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={entry.image_url} alt="" className="max-h-40 rounded-lg border border-[var(--line)] object-contain" />
+            <img src={entry.image_url} alt="" className="max-h-40 rounded-lg border border-[var(--rule)] object-contain" />
           )}
           {entry.raw_input && <p className="text-[12px] italic text-[var(--faint)]">“{entry.raw_input}”</p>}
 
@@ -209,7 +220,7 @@ function EntryRow({ entry, scaleMax, open, onToggle, onDelete }: { entry: Entry;
               {confidenceLabel(entry.confidence)}
               {entry.sources?.length ? ` · ${entry.sources.length} kaynak` : ""}
             </span>
-            <button onClick={onDelete} className="btn btn-quiet text-[12px] text-[var(--rose)]">
+            <button onClick={onDelete} className="btn btn-quiet text-[12px] text-[var(--red)]">
               Sil
             </button>
           </div>
@@ -217,7 +228,7 @@ function EntryRow({ entry, scaleMax, open, onToggle, onDelete }: { entry: Entry;
           {entry.sources?.length > 0 && (
             <div className="space-y-1">
               {entry.sources.map((s) => (
-                <a key={s.url} href={s.url} target="_blank" rel="noreferrer noopener" className="block truncate text-[11px] text-[var(--mint)] underline underline-offset-2">
+                <a key={s.url} href={s.url} target="_blank" rel="noreferrer noopener" className="block truncate text-[11px] text-[var(--red-ink)] underline underline-offset-2">
                   {s.title}
                 </a>
               ))}
