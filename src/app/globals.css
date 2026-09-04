@@ -299,18 +299,19 @@ body::before {
   .auth-page::before { content: ""; position: absolute; z-index: -2; inset: 0; background-image: var(--auth-art); background-position: center; background-size: cover; opacity: .68; animation: auth-background-drift 16s ease-in-out infinite alternate; }
   .auth-page::after { content: ""; position: absolute; z-index: -1; inset: 0; background: var(--auth-scrim); }
   .auth-page__content { display: flex; flex-direction: column; width: min(100%, 1180px); min-height: 100dvh; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
-  .auth-page__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-  .auth-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); font-family: var(--font-display); font-size: 23px; font-weight: 800; letter-spacing: .025em; }
-  .auth-brand__mark { width: 5px; height: 23px; transform: skewX(-12deg); background: var(--accent); box-shadow: 7px 0 0 color-mix(in srgb, var(--accent) 35%, transparent); }
-  .auth-panel { width: min(100%, 520px); margin: auto 0; padding: 18px; border: 1px solid color-mix(in srgb, var(--rule) 72%, transparent); border-radius: 18px; background: var(--auth-surface); box-shadow: 0 30px 80px color-mix(in srgb, var(--paper) 72%, transparent); backdrop-filter: blur(18px) saturate(1.08); }
+  .auth-page__header { position: relative; display: flex; align-items: center; justify-content: center; gap: 18px; }
+  .auth-page__header > *:last-child { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+  .auth-logo { display: block; width: 150px; height: 33px; background-image: var(--logo); background-size: contain; background-repeat: no-repeat; background-position: center; }
+  @media (min-width: 640px) { .auth-logo { width: 178px; height: 39px; } }
+  .auth-panel { width: min(100%, 460px); margin: auto; padding: 18px; border: 1px solid color-mix(in srgb, var(--rule) 72%, transparent); border-radius: 18px; background: var(--auth-surface); box-shadow: 0 30px 80px color-mix(in srgb, var(--paper) 72%, transparent); backdrop-filter: blur(18px) saturate(1.08); }
   .auth-mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 10px; background: var(--sunk); }
   .auth-mode-switch button { min-height: 38px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 650; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
   .auth-mode-switch button.is-active { color: var(--ink); background: var(--auth-surface-strong); box-shadow: 0 1px 2px color-mix(in srgb, var(--paper) 70%, transparent); }
   .auth-flow { display: grid; gap: 20px; padding: 20px 4px 4px; }
-  .auth-intro { display: grid; gap: 8px; }
+  .auth-intro { display: grid; gap: 6px; text-align: center; justify-items: center; }
   .auth-kicker { color: var(--accent-strong); font-family: var(--font-mono); font-size: 10px; font-weight: 650; letter-spacing: .16em; }
-  .auth-intro h1 { max-width: 12ch; color: var(--auth-hero); font-family: var(--font-display); font-size: clamp(38px, 8vw, 58px); font-weight: 800; letter-spacing: -.015em; line-height: .9; }
-  .auth-intro > p:last-child { max-width: 42ch; color: var(--muted); font-size: 14px; line-height: 1.45; }
+  .auth-intro h1 { max-width: 20ch; color: var(--ink); font-family: var(--font-display); font-size: clamp(24px, 5vw, 30px); font-weight: 800; letter-spacing: -.01em; line-height: 1.05; }
+  .auth-intro > p:last-child { max-width: 38ch; color: var(--muted); font-size: 13px; line-height: 1.45; }
   .auth-google-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; width: 100%; border: 1px solid var(--rule); border-radius: 10px; color: var(--ink); background: var(--auth-surface-strong); font-size: 14px; font-weight: 650; cursor: pointer; transition: transform .16s ease, background .16s ease, border-color .16s ease; }
   .auth-google-button:hover { border-color: var(--accent-border); background: var(--sunk); }
   .auth-google-button:active { transform: scale(.988); }

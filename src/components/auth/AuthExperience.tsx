@@ -237,10 +237,7 @@ export default function AuthExperience({ experience = "auth" }: { experience?: E
     <main className="auth-page">
       <div className="auth-page__content">
         <header className="auth-page__header">
-          <Link href="/" className="auth-brand" aria-label="Fit-matik ana sayfa">
-            <span className="auth-brand__mark" />
-            <span>FIT-MATİK</span>
-          </Link>
+          <Link href="/" className="auth-logo" aria-label="Fit-matik ana sayfa" />
           <ThemeSwitch />
         </header>
 
@@ -343,9 +340,8 @@ function SignIn({
   return (
     <div className="auth-flow">
       <div className="auth-intro">
-        <p className="auth-kicker">RİTMİNİ YAKALA</p>
-        <h1 id="auth-title">Bugün kendin için ne yaptın?</h1>
-        <p>Yemeğini, hedefini ve ritmini tek yerde tut.</p>
+        <h1 id="auth-title">Günlüğüne gir.</h1>
+        <p>Numaran ve şifrenle devam et.</p>
       </div>
 
       <button type="button" className="auth-google-button" onClick={onGoogle}>
@@ -412,8 +408,7 @@ function SignUp({
       <div className="auth-flow">
         <Progress current={1} />
         <div className="auth-intro">
-          <p className="auth-kicker">İLK ADIM</p>
-          <h1 id="auth-title">Kendi alanını oluştur.</h1>
+          <h1 id="auth-title">Hesap oluştur.</h1>
           <p>Telefonunla giriş yap; hesabın her cihazda seninle gelsin.</p>
         </div>
         <button type="button" className="auth-google-button" onClick={onGoogle}>
@@ -445,8 +440,7 @@ function SignUp({
           <button type="button" className="auth-back" onClick={onBack}>
             <ArrowLeft size={16} aria-hidden /> Geri
           </button>
-          <p className="auth-kicker">SENİ TANIYALIM</p>
-          <h1 id="auth-title">Hedefini sana göre kuralım.</h1>
+          <h1 id="auth-title">Seni tanıyalım.</h1>
           <p>Bu bilgiler yalnızca sana uygun günlük hedefleri hesaplamak için kullanılır.</p>
         </div>
         <ProfileForm profile={profile} onChange={onProfileChange} onSubmit={onProfileNext} error={error} label="Tema seçimine geç" />
@@ -461,8 +455,7 @@ function SignUp({
         <button type="button" className="auth-back" onClick={onThemeBack}>
           <ArrowLeft size={16} aria-hidden /> Geri
         </button>
-        <p className="auth-kicker">SON DOKUNUŞ</p>
-        <h1 id="auth-title">Dünyanı seç.</h1>
+        <h1 id="auth-title">Temanı seç.</h1>
         <p>İstersen daha sonra tek dokunuşla değiştirebilirsin.</p>
       </div>
       <ThemeChoices theme={theme} onChange={onThemeChange} />
@@ -500,8 +493,7 @@ function Onboarding({
       <div className="auth-flow">
         <Progress current={2} />
         <div className="auth-intro">
-          <p className="auth-kicker">HOŞ GELDİN</p>
-          <h1 id="auth-title">Hedefini sana göre kuralım.</h1>
+          <h1 id="auth-title">Seni tanıyalım.</h1>
           <p>Son iki küçük adımda Fit-matik senin ritmine uyacak.</p>
         </div>
         <ProfileForm profile={profile} onChange={onProfileChange} onSubmit={onNext} error={error} label="Tema seçimine geç" />
@@ -516,8 +508,7 @@ function Onboarding({
         <button type="button" className="auth-back" onClick={onBack}>
           <ArrowLeft size={16} aria-hidden /> Geri
         </button>
-        <p className="auth-kicker">SON DOKUNUŞ</p>
-        <h1 id="auth-title">Dünyanı seç.</h1>
+        <h1 id="auth-title">Temanı seç.</h1>
         <p>Bu tema günlüğünün her yerinde seninle olacak.</p>
       </div>
       <ThemeChoices theme={theme} onChange={onThemeChange} />
