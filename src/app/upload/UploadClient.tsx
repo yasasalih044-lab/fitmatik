@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
 import TokenMeter from "@/components/TokenMeter";
+import { ShiningText } from "@/components/ui/shining-text";
 import { confidenceLabel, currentDayStart, kcal, todayKey, dayKey } from "@/lib/format";
 import type { AnalyzeResult, Entry, TokenUsage } from "@/lib/types";
 
@@ -249,13 +250,14 @@ export default function UploadClient() {
 
       {busy && (
         <div className="card rise space-y-2.5 p-4">
+          <ShiningText text={phase === "parsing" ? "Yemeğin analiz ediliyor…" : "Kalori aralığı araştırılıyor…"} />
           <Step active={phase === "parsing"} done={phase === "researching"} label="Ne yediğin ayrıştırılıyor" />
           <Step active={phase === "researching"} done={false} label="İnternetten kalori aralığı toplanıyor" />
         </div>
       )}
 
       {error && (
-        <div className="rise rounded-[14px] border border-[var(--red)]/40 bg-[var(--red)]/10 p-4">
+        <div className="rise rounded-[14px] border border-[var(--accent-border)] bg-[var(--accent-wash)] p-4">
           <p className="eyebrow mb-1 text-[var(--red)]">Olmadı</p>
           <p className="text-[14px] leading-snug">{error}</p>
         </div>

@@ -1,68 +1,141 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ */
-/* Fit-matik — kağıt üstüne mürekkep.                                  */
-/* Zemin: sıcak kağıt. Metin: mürekkep siyahı. Vurgu: sinyal kırmızısı */
-/* (dövme motiflerinden alındı). İmza öğe: kalori aralığı çubuğu.      */
+/* Fit-matik — tema belirteçleri.                                      */
+/* Her görünür renk burada tanımlanır; bileşenler semantik değişken    */
+/* kullanır. Böylece üç tema aynı arayüzü bütünüyle dönüştürür.         */
 /* ------------------------------------------------------------------ */
 :root,
 [data-theme="kagit"] {
-  --paper:   #f2eee5;
-  --card:    #fbf9f4;
-  --sunk:    #e9e3d6;
-  --ink:     #17140f;
-  --ink-2:   #342f26;
-  --muted:   #6b6458;
-  --faint:   #9c9384;
-  --rule:    #d8d1c0;
-  --red:     #d2141f;
-  --red-ink: #8e0d15;
-  --on-red:  #ffffff;
-  --field:   #ffffff;
-  --grain:   0.055;
+  /* Pembe — dokulu leopar, canlı gece tonu. */
+  --paper: #14070f;
+  --card: #211019;
+  --sunk: #321422;
+  --ink: #fff1f7;
+  --ink-2: #f6cede;
+  --muted: #c69aac;
+  --faint: #8b5d70;
+  --rule: #633249;
+  --accent: #ff3c9a;
+  --accent-strong: #ff83bf;
+  --on-accent: #210710;
+  --red: var(--accent);
+  --red-ink: var(--accent-strong);
+  --on-red: var(--on-accent);
+  --field: #290e1d;
+  --success: #63e1a9;
+  --warning: #ffc45e;
+  --danger: #ff6e8b;
+  --on-success: #07170f;
+  --ink-subtle: color-mix(in srgb, var(--ink) 24%, transparent);
+  --accent-wash: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 45%, transparent);
+  --auth-art: url("/auth/backgrounds/pembe-desktop.png");
+  --auth-scrim: linear-gradient(90deg, color-mix(in srgb, var(--paper) 24%, transparent), var(--paper) 62%, var(--paper) 90%);
+  --auth-surface: color-mix(in srgb, var(--card) 91%, transparent);
+  --auth-surface-strong: color-mix(in srgb, var(--card) 97%, transparent);
+  --auth-hero: #ff9acb;
+  --shimmer-muted: #9c6179;
+  --shimmer-bright: #ffe6f2;
+  --metal-back: #120b10;
+  --metal-edge: #5e4555;
+  --metal-ink: #f2e8ee;
+  --metal-ripple: color-mix(in srgb, var(--ink) 48%, transparent);
+  --browser-theme: #14070f;
+  --grain: .045;
   --motif-alpha: .22;
-  --radius:  7px;
-  color-scheme: light;
+  --radius: 10px;
+  color-scheme: dark;
 }
 
-/* Pegasus — gece göğü, kırmızı vurgu. */
+/* Kırmızı — ejderha, ateş ve altın detay. */
 [data-theme="pegasus"] {
-  --paper:   #07070a;
-  --card:    #101016;
-  --sunk:    #1b1b23;
-  --ink:     #f2f0ee;
-  --ink-2:   #cdcac6;
-  --muted:   #9a968f;
-  --faint:   #6a6660;
-  --rule:    #26262f;
-  --red:     #e01414;
-  --red-ink: #ff3b3b;
-  --on-red:  #ffffff;
-  --field:   #15151c;
-  --grain:   0.03;
-  --motif-alpha: .34;
-  --radius:  7px;
+  --paper: #160604;
+  --card: #260b08;
+  --sunk: #3b110b;
+  --ink: #fff3df;
+  --ink-2: #f2d8ae;
+  --muted: #c7a67c;
+  --faint: #8e674e;
+  --rule: #653124;
+  --accent: #f14b39;
+  --accent-strong: #ffc05d;
+  --on-accent: #220705;
+  --red: var(--accent);
+  --red-ink: var(--accent-strong);
+  --on-red: var(--on-accent);
+  --field: #2d0d08;
+  --success: #7edb9a;
+  --warning: #ffc45e;
+  --danger: #ff786e;
+  --on-success: #08170d;
+  --ink-subtle: color-mix(in srgb, var(--ink) 23%, transparent);
+  --accent-wash: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 48%, transparent);
+  --auth-art: url("/auth/backgrounds/kirmizi-desktop.png");
+  --auth-scrim: linear-gradient(90deg, color-mix(in srgb, var(--paper) 18%, transparent), var(--paper) 60%, var(--paper) 91%);
+  --auth-surface: color-mix(in srgb, var(--card) 91%, transparent);
+  --auth-surface-strong: color-mix(in srgb, var(--card) 97%, transparent);
+  --auth-hero: #ffd17a;
+  --shimmer-muted: #9f5d43;
+  --shimmer-bright: #fff2cf;
+  --metal-back: #150908;
+  --metal-edge: #734934;
+  --metal-ink: #fff0d0;
+  --metal-ripple: color-mix(in srgb, var(--ink) 48%, transparent);
+  --browser-theme: #160604;
+  --grain: .035;
+  --motif-alpha: .30;
+  --radius: 10px;
   color-scheme: dark;
 }
 
-/* Karbon — nötr koyu, kırmızı yerine kum vurgusu. */
+/* Siyah — monokrom ejderha, metalik sakinlik. */
 [data-theme="karbon"] {
-  --paper:   #16181a;
-  --card:    #1e2124;
-  --sunk:    #282c30;
-  --ink:     #eceef0;
-  --ink-2:   #c6cacd;
-  --muted:   #939a9f;
-  --faint:   #676e73;
-  --rule:    #32373c;
-  --red:     #e0a145;
-  --red-ink: #f2b968;
-  --on-red:  #1a1408;
-  --field:   #202326;
-  --grain:   0.04;
-  --motif-alpha: .28;
-  --radius:  7px;
+  --paper: #060607;
+  --card: #111214;
+  --sunk: #1c1d20;
+  --ink: #f4f3f0;
+  --ink-2: #d1d0cc;
+  --muted: #9d9d99;
+  --faint: #6e6f71;
+  --rule: #343539;
+  --accent: #e6e5e0;
+  --accent-strong: #ffffff;
+  --on-accent: #121315;
+  --red: var(--accent);
+  --red-ink: var(--accent-strong);
+  --on-red: var(--on-accent);
+  --field: #17181a;
+  --success: #8dd9aa;
+  --warning: #e7ca75;
+  --danger: #f28888;
+  --on-success: #08170d;
+  --ink-subtle: color-mix(in srgb, var(--ink) 22%, transparent);
+  --accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 42%, transparent);
+  --auth-art: url("/auth/backgrounds/siyah-desktop.png");
+  --auth-scrim: linear-gradient(90deg, color-mix(in srgb, var(--paper) 22%, transparent), var(--paper) 62%, var(--paper) 92%);
+  --auth-surface: color-mix(in srgb, var(--card) 91%, transparent);
+  --auth-surface-strong: color-mix(in srgb, var(--card) 97%, transparent);
+  --auth-hero: #ffffff;
+  --shimmer-muted: #8e8e8c;
+  --shimmer-bright: #ffffff;
+  --metal-back: #0d0e10;
+  --metal-edge: #5d5d5c;
+  --metal-ink: #f7f6f2;
+  --metal-ripple: color-mix(in srgb, var(--ink) 48%, transparent);
+  --browser-theme: #060607;
+  --grain: .04;
+  --motif-alpha: .25;
+  --radius: 10px;
   color-scheme: dark;
+}
+
+@media (max-width: 639px) {
+  [data-theme="kagit"] { --auth-art: url("/auth/backgrounds/pembe-mobile.png"); }
+  [data-theme="pegasus"] { --auth-art: url("/auth/backgrounds/kirmizi-mobile.png"); }
+  [data-theme="karbon"] { --auth-art: url("/auth/backgrounds/siyah-mobile.png"); }
 }
 
 @theme inline {
@@ -74,6 +147,10 @@
   --color-faint: var(--faint);
   --color-rule: var(--rule);
   --color-red: var(--red);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
   --font-display: var(--font-shoulders), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
@@ -144,8 +221,8 @@ body::before {
   }
   .btn:active:not(:disabled) { transform: scale(.985); }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
-  .btn-primary { background: var(--red); color: var(--on-red); letter-spacing: .01em; }
-  .btn-primary:hover:not(:disabled) { background: var(--red-ink); }
+  .btn-primary { background: var(--accent); color: var(--on-accent); letter-spacing: .01em; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
   .btn-ghost { background: transparent; border-color: var(--rule); color: var(--ink); }
   .btn-ghost:hover:not(:disabled) { background: var(--sunk); }
   .btn-quiet { background: transparent; color: var(--muted); padding: 8px 10px; border-radius: 6px; }
@@ -162,13 +239,123 @@ body::before {
 
   .pulse { animation: fm-pulse 1.4s ease-in-out infinite; }
   .rise { animation: fm-rise .32s cubic-bezier(.2,.7,.3,1) both; }
+
+  .shining-text {
+    display: inline-block;
+    background: linear-gradient(110deg, var(--shimmer-muted), 35%, var(--shimmer-bright), 50%, var(--shimmer-muted), 75%, var(--shimmer-muted));
+    background-size: 200% 100%;
+    background-clip: text;
+    color: transparent;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  /* Şifre gücü — renk tonları sadece tema değişkenlerinden gelir. */
+  .password-strength { width: 100%; }
+  .password-strength[data-tone="none"] { --password-tone: var(--rule); --password-text: var(--faint); }
+  .password-strength[data-tone="danger"] { --password-tone: var(--danger); --password-text: var(--danger); }
+  .password-strength[data-tone="caution"] { --password-tone: var(--warning); --password-text: var(--warning); }
+  .password-strength[data-tone="safe"] { --password-tone: var(--success); --password-text: var(--success); }
+  .password-strength__meter { display: grid; gap: 6px; }
+  .password-strength__cell { position: relative; height: 5px; overflow: hidden; border-radius: 999px; background: var(--sunk); }
+  .password-strength__fill { position: absolute; inset: 0; transform-origin: left; border-radius: inherit; background: var(--password-tone); }
+  .password-strength__summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 22px; margin-top: 8px; }
+  .password-strength__label { display: grid; color: var(--password-text); font-size: 12px; font-weight: 600; line-height: 20px; }
+  .password-strength__label-item { grid-area: 1 / 1; white-space: nowrap; }
+  .password-strength__warning { color: var(--warning); font-size: 11px; line-height: 20px; white-space: nowrap; }
+  .password-strength__rules { display: grid; gap: 6px; margin-top: 10px; color: var(--faint); font-size: 12px; line-height: 18px; }
+  .password-strength__rule { display: flex; align-items: center; gap: 8px; }
+  .password-strength__rule[data-met="true"] { color: var(--ink-2); }
+  .password-strength__check { display: grid; width: 14px; height: 14px; flex: 0 0 auto; place-items: center; border: 1px solid var(--rule); border-radius: 4px; color: var(--on-success); background: transparent; }
+  .password-strength__rule[data-met="true"] .password-strength__check { border-color: var(--success); background: var(--success); }
+  .password-strength__check-mark { width: 9px; height: 9px; }
+
+  /* Sıvı metal — WebGL katmanı yoksa alttaki metal yüzey görünür. */
+  .liquid-metal-button { position: relative; display: inline-block; width: 142px; height: 46px; isolation: isolate; perspective: 1000px; }
+  .liquid-metal-button--icon { width: 46px; }
+  .liquid-metal-button--full { display: block; width: 100%; }
+  .liquid-metal-button__surface { position: absolute; inset: 0; z-index: 1; overflow: hidden; border: 1px solid var(--metal-edge); border-radius: 999px; background: linear-gradient(180deg, color-mix(in srgb, var(--metal-edge) 44%, var(--metal-back)), var(--metal-back)); box-shadow: 0 20px 16px color-mix(in srgb, var(--paper) 72%, transparent), inset 0 1px 1px color-mix(in srgb, var(--ink) 15%, transparent); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+  .liquid-metal-button__surface::after { content: ""; position: absolute; inset: 2px; z-index: 2; border-radius: inherit; background: linear-gradient(180deg, color-mix(in srgb, var(--metal-back) 60%, transparent), color-mix(in srgb, var(--metal-back) 90%, transparent)); pointer-events: none; }
+  .liquid-metal-button__shader { position: absolute; inset: 0; opacity: .68; mix-blend-mode: screen; }
+  .liquid-metal-button__shader canvas { display: block !important; width: 100% !important; height: 100% !important; border-radius: inherit !important; }
+  .liquid-metal-button__content { position: absolute; z-index: 3; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--metal-ink); font-size: 14px; font-weight: 650; letter-spacing: .01em; text-shadow: 0 1px 2px color-mix(in srgb, var(--paper) 74%, transparent); pointer-events: none; }
+  .liquid-metal-button__control { position: absolute; z-index: 4; inset: 0; overflow: hidden; width: 100%; height: 100%; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
+  .liquid-metal-button[data-hovered="true"] .liquid-metal-button__surface { border-color: var(--accent-border); box-shadow: 0 13px 10px color-mix(in srgb, var(--paper) 68%, transparent), inset 0 1px 1px color-mix(in srgb, var(--ink) 21%, transparent); }
+  .liquid-metal-button[data-pressed="true"] .liquid-metal-button__surface { transform: translateY(1px) scale(.985); box-shadow: inset 0 2px 5px color-mix(in srgb, var(--paper) 65%, transparent); }
+  .liquid-metal-button__control:disabled { cursor: not-allowed; }
+  .liquid-metal-button:has(.liquid-metal-button__control:disabled) { opacity: .48; }
+  .liquid-metal-button[data-disabled="true"] .liquid-metal-button__shader { opacity: 0; }
+  .liquid-metal-button__ripple { position: absolute; width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(circle, var(--metal-ripple) 0%, transparent 70%); pointer-events: none; animation: liquid-ripple .6s ease-out both; }
+
+  /* Kimlik doğrulama ve ilk kurulum. */
+  .auth-page { position: relative; isolation: isolate; min-height: 100dvh; overflow: hidden; background: var(--paper); }
+  .auth-page::before { content: ""; position: absolute; z-index: -2; inset: 0; background-image: var(--auth-art); background-position: center; background-size: cover; opacity: .68; animation: auth-background-drift 16s ease-in-out infinite alternate; }
+  .auth-page::after { content: ""; position: absolute; z-index: -1; inset: 0; background: var(--auth-scrim); }
+  .auth-page__content { display: flex; flex-direction: column; width: min(100%, 1180px); min-height: 100dvh; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+  .auth-page__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+  .auth-brand { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); font-family: var(--font-display); font-size: 23px; font-weight: 800; letter-spacing: .025em; }
+  .auth-brand__mark { width: 5px; height: 23px; transform: skewX(-12deg); background: var(--accent); box-shadow: 7px 0 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+  .auth-panel { width: min(100%, 520px); margin: auto 0; padding: 18px; border: 1px solid color-mix(in srgb, var(--rule) 72%, transparent); border-radius: 18px; background: var(--auth-surface); box-shadow: 0 30px 80px color-mix(in srgb, var(--paper) 72%, transparent); backdrop-filter: blur(18px) saturate(1.08); }
+  .auth-mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 10px; background: var(--sunk); }
+  .auth-mode-switch button { min-height: 38px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 650; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
+  .auth-mode-switch button.is-active { color: var(--ink); background: var(--auth-surface-strong); box-shadow: 0 1px 2px color-mix(in srgb, var(--paper) 70%, transparent); }
+  .auth-flow { display: grid; gap: 20px; padding: 20px 4px 4px; }
+  .auth-intro { display: grid; gap: 8px; }
+  .auth-kicker { color: var(--accent-strong); font-family: var(--font-mono); font-size: 10px; font-weight: 650; letter-spacing: .16em; }
+  .auth-intro h1 { max-width: 12ch; color: var(--auth-hero); font-family: var(--font-display); font-size: clamp(38px, 8vw, 58px); font-weight: 800; letter-spacing: -.015em; line-height: .9; }
+  .auth-intro > p:last-child { max-width: 42ch; color: var(--muted); font-size: 14px; line-height: 1.45; }
+  .auth-google-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; width: 100%; border: 1px solid var(--rule); border-radius: 10px; color: var(--ink); background: var(--auth-surface-strong); font-size: 14px; font-weight: 650; cursor: pointer; transition: transform .16s ease, background .16s ease, border-color .16s ease; }
+  .auth-google-button:hover { border-color: var(--accent-border); background: var(--sunk); }
+  .auth-google-button:active { transform: scale(.988); }
+  .auth-separator { display: flex; align-items: center; gap: 11px; color: var(--faint); font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; }
+  .auth-separator::before, .auth-separator::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+  .auth-form, .auth-fields { display: grid; gap: 15px; }
+  .auth-field { display: grid; gap: 7px; color: var(--ink-2); font-size: 13px; font-weight: 650; }
+  .auth-field small { color: var(--faint); font-size: 11px; font-weight: 400; line-height: 1.4; }
+  .auth-input-wrap, .auth-unit-input { position: relative; display: flex; align-items: center; }
+  .auth-input-wrap > svg { position: absolute; z-index: 1; left: 14px; color: var(--faint); pointer-events: none; }
+  .auth-input-wrap input { padding-left: 42px; padding-right: 42px; }
+  .auth-eye { position: absolute; right: 6px; display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 7px; color: var(--faint); background: transparent; cursor: pointer; }
+  .auth-eye:hover { color: var(--ink); background: var(--sunk); }
+  .auth-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+  .auth-unit-input input { padding-right: 32px; }
+  .auth-unit-input > span { position: absolute; right: 11px; color: var(--faint); font-family: var(--font-mono); font-size: 11px; pointer-events: none; }
+  .auth-error { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent); border-radius: 9px; color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); font-size: 13px; line-height: 1.35; }
+  .auth-loading { display: grid; min-height: 46px; place-items: center; border: 1px solid var(--rule); border-radius: 999px; background: var(--sunk); }
+  .auth-back { display: inline-flex; width: fit-content; align-items: center; gap: 5px; margin-bottom: 4px; padding: 0; border: 0; color: var(--muted); background: transparent; font-size: 12px; font-weight: 650; cursor: pointer; }
+  .auth-back:hover { color: var(--ink); }
+  .auth-progress { display: flex; align-items: center; gap: 7px; }
+  .auth-progress::before, .auth-progress::after { content: ""; flex: 1; max-width: 42px; height: 1px; background: var(--rule); }
+  .auth-progress > span { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid var(--rule); border-radius: 50%; color: var(--faint); font-family: var(--font-mono); font-size: 10px; }
+  .auth-progress > span[data-active="true"] { border-color: var(--accent); color: var(--on-accent); background: var(--accent); }
+  .auth-theme-choices { display: grid; gap: 9px; }
+  .auth-theme-choice { display: grid; grid-template-columns: 70px minmax(0, 1fr) 22px; align-items: center; gap: 12px; width: 100%; overflow: hidden; padding: 7px; border: 1px solid var(--rule); border-radius: 12px; color: var(--ink); background: var(--auth-surface-strong); text-align: left; cursor: pointer; transition: transform .18s ease, border-color .18s ease, background .18s ease; }
+  .auth-theme-choice:hover { transform: translateX(2px); border-color: var(--accent-border); }
+  .auth-theme-choice[data-selected="true"] { border-color: var(--accent); background: var(--accent-wash); }
+  .auth-theme-choice__image { display: grid; height: 54px; place-items: center; border-radius: 8px; color: var(--ink); background-image: var(--choice-art); background-position: center; background-size: cover; font-family: var(--font-display); font-size: 23px; font-weight: 800; text-shadow: 0 1px 6px var(--paper); }
+  .auth-theme-choice[data-theme-option="kagit"] { --choice-art: url("/auth/backgrounds/pembe-mobile.png"); }
+  .auth-theme-choice[data-theme-option="pegasus"] { --choice-art: url("/auth/backgrounds/kirmizi-mobile.png"); }
+  .auth-theme-choice[data-theme-option="karbon"] { --choice-art: url("/auth/backgrounds/siyah-mobile.png"); }
+  .auth-theme-choice__copy { display: grid; gap: 3px; min-width: 0; }
+  .auth-theme-choice__copy strong { font-size: 14px; }
+  .auth-theme-choice__copy small { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.35; }
+  .auth-theme-choice__check { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid var(--rule); border-radius: 50%; color: var(--on-accent); }
+  .auth-theme-choice[data-selected="true"] .auth-theme-choice__check { border-color: var(--accent); background: var(--accent); }
+  .auth-page__privacy { margin-top: 20px; color: var(--faint); font-size: 11px; line-height: 1.4; }
+
+  .theme-swatch { width: 20px; height: 20px; border: 1px solid var(--rule); border-radius: 50%; background: var(--swatch); box-shadow: inset 0 0 0 2px var(--paper); transition: transform .16s ease, border-color .16s ease; }
+  .theme-swatch[data-theme-option="kagit"] { --swatch: #e52a88; }
+  .theme-swatch[data-theme-option="pegasus"] { --swatch: #d82e1f; }
+  .theme-swatch[data-theme-option="karbon"] { --swatch: #171719; }
+  .theme-swatch[aria-pressed="true"] { border-color: var(--ink); transform: scale(1.12); box-shadow: inset 0 0 0 2px var(--paper), 0 0 0 2px var(--accent); }
+  .theme-swatch:not([aria-pressed="true"]):hover { transform: scale(1.06); }
 }
 
 /* Temel katmanda: Tailwind yardımcı sınıfları bunları ezebilsin.
    (Katman dışında kalırsa `color: inherit`, `text-*` sınıflarını yener.) */
 @layer base {
   button, input, textarea, select { font: inherit; color: inherit; }
-  textarea, input[type="text"], input[type="password"] {
+  textarea, input[type="text"], input[type="password"], input[type="tel"], input[type="number"], select {
     background: var(--field);
     border: 1px solid var(--rule);
     border-radius: 6px;
@@ -188,6 +375,8 @@ body::before {
 @keyframes fm-pulse { 0%,100% { opacity:.3 } 50% { opacity:1 } }
 @keyframes fm-rise { from { opacity:0; transform: translateY(8px) } to { opacity:1; transform:none } }
 @keyframes fm-motif { from { opacity:0 } to { opacity:var(--motif-opacity) } }
+@keyframes liquid-ripple { from { transform: translate(-50%, -50%) scale(0); opacity: .65; } to { transform: translate(-50%, -50%) scale(4); opacity: 0; } }
+@keyframes auth-background-drift { from { transform: scale(1); background-position: 48% 50%; } to { transform: scale(1.06); background-position: 54% 47%; } }
 
 /* --- Köşe motifi: her açılışta biri, içeriğin arkasında ------------ */
 .motif {
@@ -210,6 +399,12 @@ body::before {
 @media (min-width: 640px) {
   .motif { width: 290px; bottom: -24px; right: -34px; }
   .motif--left { right: auto; left: -34px; }
+}
+
+@media (min-width: 760px) {
+  .auth-page__content { padding: 30px 42px; }
+  .auth-panel { margin-left: auto; padding: 22px; }
+  .auth-page__privacy { margin-left: auto; width: min(100%, 520px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
