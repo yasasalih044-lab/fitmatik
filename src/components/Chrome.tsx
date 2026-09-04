@@ -25,9 +25,10 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <div className="app-page-art" aria-hidden />
       <Motif />
-      <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[560px] flex-col px-4">
-        <header className="safe-top flex items-end justify-between pb-5">
+      <div className="app-shell">
+        <header className="app-header safe-top">
           <Link href="/upload" className="flex items-center gap-2.5">
             <span className="block h-5 w-[5px] -skew-x-12 bg-[var(--red)]" />
             <span className="display text-[22px] uppercase tracking-[-0.01em]">Fit-matik</span>
@@ -60,7 +61,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
           </p>
         )}
 
-        <main className="safe-bottom flex-1">{children}</main>
+        <main className="app-main safe-bottom">{children}</main>
       </div>
     </>
   );

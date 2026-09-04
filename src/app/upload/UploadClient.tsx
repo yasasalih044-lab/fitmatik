@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Camera, PencilLine, Sparkles } from "lucide-react";
 import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
 import TokenMeter from "@/components/TokenMeter";
+import { LiquidMetalButton } from "@/components/ui/liquid-metal-button";
 import { ShiningText } from "@/components/ui/shining-text";
 import { confidenceLabel, currentDayStart, kcal, todayKey, dayKey } from "@/lib/format";
 import type { AnalyzeResult, Entry, TokenUsage } from "@/lib/types";
@@ -156,128 +158,142 @@ export default function UploadClient() {
   const canSubmit = mode === "text" ? text.trim().length > 1 : !!image;
 
   return (
-    <div className="space-y-5 pb-10">
+    <div className="meal-workspace">
       <TokenMeter last={lastUsage} session={sessionUsage} />
-      {/* Bugünkü toplam — kayıt eklemenin neden önemli olduğunu hep göster */}
-      <div className="flex items-baseline justify-between">
-        <p className="eyebrow">Bugün</p>
-        <p className="mono text-sm text-[var(--muted)]">
-          {todayTotal === null ? "—" : `${kcal(todayTotal)} kcal`}
-        </p>
-      </div>
 
-      <div className="flex gap-1 rounded-md border border-[var(--rule)] bg-[var(--sunk)] p-1">
-        {([
-          ["text", "Yazıyla"],
-          ["image", "Paket fotoğrafı"],
-        ] as const).map(([m, label]) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            disabled={busy}
-            className={`btn flex-1 rounded-[5px] py-2.5 text-sm ${
-              mode === m ? "bg-[var(--ink)] text-[var(--paper)]" : "text-[var(--muted)]"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {mode === "text" ? (
-        <div className="space-y-3">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={4}
-            disabled={busy}
-            placeholder="Ne yedin? Örn: iki dilim ekmek, bir haşlanmış yumurta ve çay"
-            className="resize-none text-[16px]"
-          />
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-            {EXAMPLES.map((ex) => (
-              <button
-                key={ex}
-                onClick={() => setText(ex)}
-                disabled={busy}
-                className="btn btn-ghost shrink-0 whitespace-nowrap px-3 py-1.5 text-[12px] font-normal text-[var(--muted)]"
-              >
-                {ex}
-              </button>
-            ))}
-          </div>
+      <section className="meal-hero rise" aria-labelledby="meal-title">
+        <div className="meal-hero__copy">
+          <p className="meal-eyebrow"><Sparkles size={13} strokeWidth={1.8} aria-hidden /> BESLENME GÜNLÜĞÜ</p>
+          <h1 id="meal-title">Yemeğini ekle.<br /><span>Ritmin sende kalsın.</span></h1>
+          <p>Ne yediğini yaz ya da paketin fotoğrafını yükle. Fit-matik kalan işi senin için araştırsın.</p>
         </div>
-      ) : (
-        <div className="space-y-3">
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={pickFile} className="hidden" />
-          {image ? (
-            <div className="card overflow-hidden">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={image} alt="Yüklenen paket fotoğrafı" className="max-h-64 w-full object-contain bg-[var(--sunk)]" />
-              <div className="flex items-center justify-between border-t border-[var(--rule)] px-3 py-2">
-                <span className="eyebrow">Fotoğraf hazır</span>
-                <button onClick={() => fileRef.current?.click()} disabled={busy} className="btn btn-quiet text-[12px]">
-                  Değiştir
+        <div className="meal-total" aria-live="polite">
+          <p>BUGÜN</p>
+          <strong>{todayTotal === null ? "—" : kcal(todayTotal)}</strong>
+          <span>kcal kaydedildi</span>
+        </div>
+      </section>
+
+      <section className="meal-composer rise" aria-label="Yeni beslenme kaydı">
+        <div className="meal-composer__heading">
+          <div>
+            <p className="eyebrow">YENİ KAYIT</p>
+            <h2>Ne yedin?</h2>
+          </div>
+          <p>Yazıyla anlat ya da paket bilgisini ekle.</p>
+        </div>
+
+        <div className="meal-mode-switch" role="tablist" aria-label="Kayıt yöntemi">
+          {([
+            ["text", "Yazıyla"],
+            ["image", "Paket fotoğrafı"],
+          ] as const).map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              onClick={() => setMode(m)}
+              disabled={busy}
+              className={mode === m ? "is-active" : ""}
+            >
+              {m === "text" ? <PencilLine size={16} strokeWidth={1.8} aria-hidden /> : <Camera size={16} strokeWidth={1.8} aria-hidden />}
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === "text" ? (
+          <div className="meal-entry">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={5}
+              disabled={busy}
+              placeholder="Örn: iki dilim ekmek, bir haşlanmış yumurta ve çay"
+              className="meal-textarea"
+            />
+            <div className="meal-examples" aria-label="Örnek kayıtlar">
+              {EXAMPLES.map((ex) => (
+                <button key={ex} type="button" onClick={() => setText(ex)} disabled={busy}>
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="meal-entry">
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={pickFile} className="hidden" />
+            {image ? (
+              <div className="meal-photo-preview">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={image} alt="Yüklenen paket fotoğrafı" />
+                <div>
+                  <span><Camera size={15} strokeWidth={1.8} aria-hidden /> FOTOĞRAF HAZIR</span>
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}>Değiştir</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className="meal-photo-picker">
+                <span><Camera size={22} strokeWidth={1.6} aria-hidden /></span>
+                <strong>Paketin fotoğrafını çek</strong>
+                <small>Besin değerleri tablosu net görünsün.</small>
+              </button>
+            )}
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={busy}
+              placeholder="Not (isteğe bağlı): yarısını yedim, 2 paket…"
+              className="meal-note"
+            />
+          </div>
+        )}
+
+        <div className="meal-action">
+          <p>{canSubmit ? "Hazır olduğunda hesaplamayı başlat." : mode === "text" ? "Yemeğini birkaç kelimeyle anlat." : "Önce paket fotoğrafını ekle."}</p>
+          <LiquidMetalButton
+            label={busy ? "Hesaplanıyor…" : "Kalorini hesapla"}
+            onClick={submit}
+            disabled={!canSubmit || busy}
+            fullWidth
+          />
+        </div>
+      </section>
+
+      <div className="meal-feedback">
+        {busy && (
+          <div className="meal-thinking rise">
+            <ShiningText text={phase === "parsing" ? "Yemeğin analiz ediliyor…" : "Kalori aralığı araştırılıyor…"} />
+            <Step active={phase === "parsing"} done={phase === "researching"} label="Ne yediğin ayrıştırılıyor" />
+            <Step active={phase === "researching"} done={false} label="İnternetten kalori aralığı toplanıyor" />
+          </div>
+        )}
+
+        {error && (
+          <div className="rise rounded-[14px] border border-[var(--accent-border)] bg-[var(--accent-wash)] p-4">
+            <p className="eyebrow mb-1 text-[var(--red)]">Olmadı</p>
+            <p className="text-[14px] leading-snug">{error}</p>
+          </div>
+        )}
+
+        {result && (
+          <div ref={resultRef}>
+            {result.rejected ? (
+              <div className="card rise space-y-3 p-4">
+                <p className="eyebrow">Kaydedilmedi</p>
+                <p className="text-[15px] leading-snug">{result.rejected.reason}</p>
+                <button type="button" onClick={() => setMode("text")} className="btn btn-ghost w-full py-2.5 text-sm">
+                  Yazıyla gir
                 </button>
               </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={busy}
-              className="card flex w-full flex-col items-center gap-1.5 px-4 py-10 text-center"
-            >
-              <span className="display text-[15px]">Paketin fotoğrafını çek</span>
-              <span className="max-w-[34ch] text-[13px] leading-snug text-[var(--muted)]">
-                Besin değerleri tablosu görünsün. Tabak yemeği yerine yazı sekmesini kullan.
-              </span>
-            </button>
-          )}
-          <input
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={busy}
-            placeholder="Not (isteğe bağlı): yarısını yedim, 2 paket…"
-            className="text-[16px]"
-          />
-        </div>
-      )}
-
-      <button onClick={submit} disabled={!canSubmit || busy} className="btn btn-primary w-full">
-        {busy ? "Hesaplanıyor…" : "Kalorisini hesapla"}
-      </button>
-
-      {busy && (
-        <div className="card rise space-y-2.5 p-4">
-          <ShiningText text={phase === "parsing" ? "Yemeğin analiz ediliyor…" : "Kalori aralığı araştırılıyor…"} />
-          <Step active={phase === "parsing"} done={phase === "researching"} label="Ne yediğin ayrıştırılıyor" />
-          <Step active={phase === "researching"} done={false} label="İnternetten kalori aralığı toplanıyor" />
-        </div>
-      )}
-
-      {error && (
-        <div className="rise rounded-[14px] border border-[var(--accent-border)] bg-[var(--accent-wash)] p-4">
-          <p className="eyebrow mb-1 text-[var(--red)]">Olmadı</p>
-          <p className="text-[14px] leading-snug">{error}</p>
-        </div>
-      )}
-
-      {result && (
-        <div ref={resultRef}>
-          {result.rejected ? (
-            <div className="card rise space-y-3 p-4">
-              <p className="eyebrow">Kaydedilmedi</p>
-              <p className="text-[15px] leading-snug">{result.rejected.reason}</p>
-              <button onClick={() => setMode("text")} className="btn btn-ghost w-full py-2.5 text-sm">
-                Yazıyla gir
-              </button>
-            </div>
-          ) : (
-            <ResultCard result={result} saved={!!entry} onDelete={removeEntry} onNew={reset} />
-          )}
-        </div>
-      )}
+            ) : (
+              <ResultCard result={result} saved={!!entry} onDelete={removeEntry} onNew={reset} />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
