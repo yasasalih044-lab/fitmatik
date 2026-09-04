@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, PencilLine, Sparkles } from "lucide-react";
+import { Camera, PencilLine } from "lucide-react";
 import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
 import TokenMeter from "@/components/TokenMeter";
@@ -161,26 +161,14 @@ export default function UploadClient() {
     <div className="meal-workspace">
       <TokenMeter last={lastUsage} session={sessionUsage} />
 
-      <section className="meal-hero rise" aria-labelledby="meal-title">
-        <div className="meal-hero__copy">
-          <p className="meal-eyebrow"><Sparkles size={13} strokeWidth={1.8} aria-hidden /> BESLENME GÜNLÜĞÜ</p>
-          <h1 id="meal-title">Yemeğini ekle.<br /><span>Ritmin sende kalsın.</span></h1>
-          <p>Ne yediğini yaz ya da paketin fotoğrafını yükle. Fit-matik kalan işi senin için araştırsın.</p>
-        </div>
-        <div className="meal-total" aria-live="polite">
-          <p>BUGÜN</p>
-          <strong>{todayTotal === null ? "—" : kcal(todayTotal)}</strong>
-          <span>kcal kaydedildi</span>
-        </div>
-      </section>
-
-      <section className="meal-composer rise" aria-label="Yeni beslenme kaydı">
+      <section className="meal-composer rise" aria-labelledby="meal-title">
         <div className="meal-composer__heading">
           <div>
-            <p className="eyebrow">YENİ KAYIT</p>
-            <h2>Ne yedin?</h2>
+            <h2 id="meal-title">Ne yedin?</h2>
           </div>
-          <p>Yazıyla anlat ya da paket bilgisini ekle.</p>
+          <p className="mono text-[12px] text-[var(--muted)]" aria-live="polite">
+            Bugün {todayTotal === null ? "—" : `${kcal(todayTotal)} kcal`}
+          </p>
         </div>
 
         <div className="meal-mode-switch" role="tablist" aria-label="Kayıt yöntemi">

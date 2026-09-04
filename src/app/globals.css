@@ -303,7 +303,7 @@ body::before {
   .auth-page__header > *:last-child { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
   .auth-logo { display: block; width: 150px; height: 33px; background-image: var(--logo); background-size: contain; background-repeat: no-repeat; background-position: center; }
   @media (min-width: 640px) { .auth-logo { width: 178px; height: 39px; } }
-  .auth-panel { width: min(100%, 460px); margin: auto; padding: 18px; border: 1px solid color-mix(in srgb, var(--rule) 72%, transparent); border-radius: 18px; background: var(--auth-surface); box-shadow: 0 30px 80px color-mix(in srgb, var(--paper) 72%, transparent); backdrop-filter: blur(18px) saturate(1.08); }
+  .auth-panel { width: 100%; max-width: 460px; margin-inline: auto; margin-block: auto; padding: 18px; border: 1px solid color-mix(in srgb, var(--rule) 72%, transparent); border-radius: 18px; background: var(--auth-surface); box-shadow: 0 30px 80px color-mix(in srgb, var(--paper) 72%, transparent); backdrop-filter: blur(18px) saturate(1.08); }
   .auth-mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 10px; background: var(--sunk); }
   .auth-mode-switch button { min-height: 38px; border: 0; border-radius: 7px; color: var(--muted); background: transparent; font-size: 13px; font-weight: 650; cursor: pointer; transition: color .18s ease, background .18s ease, box-shadow .18s ease; }
   .auth-mode-switch button.is-active { color: var(--ink); background: var(--auth-surface-strong); box-shadow: 0 1px 2px color-mix(in srgb, var(--paper) 70%, transparent); }
