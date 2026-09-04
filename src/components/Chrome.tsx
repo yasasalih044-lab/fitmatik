@@ -55,7 +55,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
         </header>
 
         {storeWarning && (
-          <p className="mb-4 rounded-md border border-[var(--red)]/30 bg-[var(--red)]/8 px-3 py-2 text-[12px] leading-snug text-[var(--red-ink)]">
+          <p className="mb-4 rounded-md border border-[var(--accent-border)] bg-[var(--accent-wash)] px-3 py-2 text-[12px] leading-snug text-[var(--red-ink)]">
             {storeWarning}
           </p>
         )}
