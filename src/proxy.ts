@@ -4,7 +4,7 @@ import { readSession, SESSION_COOKIE } from "@/lib/accounts";
 /** Oturum gerektirmeyen yollar. */
 const PUBLIC = [
   "/login", "/kayit",
-  "/api/auth", "/api/health",
+  "/api/auth", "/api/health", "/api/backgrounds",
   "/manifest.webmanifest", "/icon", "/apple-icon", "/favicon.ico",
   "/marka", "/auth",
 ];

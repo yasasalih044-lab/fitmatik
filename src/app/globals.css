@@ -8,6 +8,8 @@
 :root,
 [data-theme="pembe"] {
   --logo: url("/marka/logo-beyaz.webp");
+  --shiny-highlight: #ff2d9b;
+  --shiny-highlight-subtle: #ff9ed0;
   --auth-art-desktop: url("/auth/backgrounds/pembe-desktop.png");
   --auth-art-mobile: url("/auth/backgrounds/pembe-mobile.png");
   /* Pembe — dokulu leopar, canlı gece tonu. */
@@ -34,7 +36,7 @@
   --accent-wash: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 45%, transparent);
   --auth-art: url("/auth/backgrounds/pembe-desktop.png");
-  --auth-scrim: linear-gradient(90deg, color-mix(in srgb, var(--paper) 24%, transparent), var(--paper) 62%, var(--paper) 90%);
+  --auth-scrim: radial-gradient(120% 100% at 50% 45%, color-mix(in srgb, var(--paper) 30%, transparent), color-mix(in srgb, var(--paper) 62%, transparent) 62%, color-mix(in srgb, var(--paper) 88%, transparent) 100%);
   --auth-surface: color-mix(in srgb, var(--card) 91%, transparent);
   --auth-surface-strong: color-mix(in srgb, var(--card) 97%, transparent);
   --auth-hero: #ff9acb;
@@ -53,6 +55,8 @@
 /* Kırmızı — ejderha, ateş ve altın detay. */
 [data-theme="kirmizi"] {
   --logo: url("/marka/logo-beyaz.webp");
+  --shiny-highlight: #e0141f;
+  --shiny-highlight-subtle: #ff8a8a;
   --auth-art-desktop: url("/auth/backgrounds/kirmizi-desktop.png");
   --auth-art-mobile: url("/auth/backgrounds/kirmizi-mobile.png");
   --paper: #160604;
@@ -78,7 +82,7 @@
   --accent-wash: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 48%, transparent);
   --auth-art: url("/auth/backgrounds/kirmizi-desktop.png");
-  --auth-scrim: linear-gradient(90deg, color-mix(in srgb, var(--paper) 18%, transparent), var(--paper) 60%, var(--paper) 91%);
+  --auth-scrim: radial-gradient(120% 100% at 50% 45%, color-mix(in srgb, var(--paper) 30%, transparent), color-mix(in srgb, var(--paper) 62%, transparent) 62%, color-mix(in srgb, var(--paper) 88%, transparent) 100%);
   --auth-surface: color-mix(in srgb, var(--card) 91%, transparent);
   --auth-surface-strong: color-mix(in srgb, var(--card) 97%, transparent);
   --auth-hero: #ffd17a;
@@ -98,6 +102,8 @@
 [data-theme="siyah"] {
   /* Yeşilli logo YALNIZCA siyah temada; diğerlerinde tek renk. */
   --logo: url("/marka/logo-yesil.webp");
+  --shiny-highlight: #3ee63e;
+  --shiny-highlight-subtle: #9dfb9d;
   --auth-art-desktop: url("/auth/backgrounds/siyah-desktop.png");
   --auth-art-mobile: url("/auth/backgrounds/siyah-mobile.png");
   --paper: #060607;
@@ -123,7 +129,7 @@
   --accent-wash: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 42%, transparent);
   --auth-art: url("/auth/backgrounds/siyah-desktop.png");
-  --auth-scrim: linear-gradient(90deg, color-mix(in srgb, var(--paper) 22%, transparent), var(--paper) 62%, var(--paper) 92%);
+  --auth-scrim: radial-gradient(120% 100% at 50% 45%, color-mix(in srgb, var(--paper) 30%, transparent), color-mix(in srgb, var(--paper) 62%, transparent) 62%, color-mix(in srgb, var(--paper) 88%, transparent) 100%);
   --auth-surface: color-mix(in srgb, var(--card) 91%, transparent);
   --auth-surface-strong: color-mix(in srgb, var(--card) 97%, transparent);
   --auth-hero: #ffffff;
@@ -296,7 +302,7 @@ body::before {
 
   /* Kimlik doğrulama ve ilk kurulum. */
   .auth-page { position: relative; isolation: isolate; min-height: 100dvh; overflow: hidden; background: var(--paper); }
-  .auth-page::before { content: ""; position: absolute; z-index: -2; inset: 0; background-image: var(--auth-art); background-position: center; background-size: cover; opacity: .68; animation: auth-background-drift 16s ease-in-out infinite alternate; }
+  .auth-page::before { content: ""; position: absolute; z-index: -2; inset: 0; background-image: var(--auth-art); background-position: center; background-size: cover; opacity: .92; animation: auth-background-drift 16s ease-in-out infinite alternate; }
   .auth-page::after { content: ""; position: absolute; z-index: -1; inset: 0; background: var(--auth-scrim); }
   .auth-page__content { display: flex; flex-direction: column; width: min(100%, 1180px); min-height: 100dvh; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
   .auth-page__header { position: relative; display: flex; align-items: center; justify-content: center; gap: 18px; }
@@ -455,4 +461,129 @@ body::before {
 }
 @media (min-width: 640px) {
   .marka { width: 158px; height: 35px; }
+}
+
+/* --- Vurgu düğmesi (shiny-cta) ------------------------------------- */
+/* @property tanımları katman dışında olmalı, yoksa açı animasyonu çalışmaz. */
+@property --gradient-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@property --gradient-angle-offset { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+@property --gradient-percent { syntax: "<percentage>"; initial-value: 5%; inherits: false; }
+@property --gradient-shine { syntax: "<color>"; initial-value: white; inherits: false; }
+
+.shiny-cta {
+  --shiny-cta-bg: color-mix(in srgb, var(--paper) 82%, #000);
+  --shiny-cta-bg-subtle: color-mix(in srgb, var(--paper) 60%, #000);
+  --shiny-cta-fg: var(--ink);
+  --shiny-cta-highlight: var(--shiny-highlight, var(--red));
+  --shiny-cta-highlight-subtle: var(--shiny-highlight-subtle, var(--red-ink));
+  --animation: gradient-angle linear infinite;
+  --duration: 3s;
+  --shadow-size: 2px;
+  --transition: 800ms cubic-bezier(.25, 1, .5, 1);
+
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  outline-offset: 4px;
+  width: 100%;
+  min-height: 56px;
+  padding: 1rem 2rem;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 650;
+  border: 1px solid transparent;
+  border-radius: 360px;
+  color: var(--shiny-cta-fg);
+  background:
+    linear-gradient(var(--shiny-cta-bg), var(--shiny-cta-bg)) padding-box,
+    conic-gradient(
+      from calc(var(--gradient-angle) - var(--gradient-angle-offset)),
+      transparent,
+      var(--shiny-cta-highlight) var(--gradient-percent),
+      var(--gradient-shine) calc(var(--gradient-percent) * 2),
+      var(--shiny-cta-highlight) calc(var(--gradient-percent) * 3),
+      transparent calc(var(--gradient-percent) * 4)
+    ) border-box;
+  box-shadow: inset 0 0 0 1px var(--shiny-cta-bg-subtle);
+  transition: var(--transition);
+  transition-property: --gradient-angle-offset, --gradient-percent, --gradient-shine;
+}
+
+.shiny-cta::before,
+.shiny-cta::after,
+.shiny-cta span::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-start: 50%;
+  translate: -50% -50%;
+  z-index: -1;
+}
+
+.shiny-cta:active { translate: 0 1px; }
+.shiny-cta:disabled { cursor: not-allowed; opacity: .45; }
+
+/* Noktalı doku */
+.shiny-cta::before {
+  --size: calc(100% - var(--shadow-size) * 3);
+  --position: 2px;
+  --space: calc(var(--position) * 2);
+  width: var(--size);
+  height: var(--size);
+  background: radial-gradient(circle at var(--position) var(--position), var(--ink) calc(var(--position) / 4), transparent 0) padding-box;
+  background-size: var(--space) var(--space);
+  background-repeat: space;
+  mask-image: conic-gradient(from calc(var(--gradient-angle) + 45deg), black, transparent 10% 90%, black);
+  border-radius: inherit;
+  opacity: .4;
+  z-index: -1;
+}
+
+/* İç parıltı */
+.shiny-cta::after {
+  --animation: shimmer linear infinite;
+  width: 100%;
+  aspect-ratio: 1;
+  background: linear-gradient(-50deg, transparent, var(--shiny-cta-highlight), transparent);
+  mask-image: radial-gradient(circle at bottom, transparent 40%, black);
+  opacity: .6;
+}
+
+.shiny-cta span { z-index: 1; position: relative; }
+.shiny-cta span::before {
+  --size: calc(100% + 1rem);
+  width: var(--size);
+  height: var(--size);
+  box-shadow: inset 0 -1ex 2rem 4px var(--shiny-cta-highlight);
+  opacity: 0;
+  transition: opacity var(--transition);
+  animation: calc(var(--duration) * 1.5) breathe linear infinite;
+}
+
+.shiny-cta,
+.shiny-cta::before,
+.shiny-cta::after {
+  animation: var(--animation) var(--duration), var(--animation) calc(var(--duration) / .4) reverse paused;
+  animation-composition: add;
+}
+
+.shiny-cta:is(:hover, :focus-visible) {
+  --gradient-percent: 20%;
+  --gradient-angle-offset: 95deg;
+  --gradient-shine: var(--shiny-cta-highlight-subtle);
+}
+.shiny-cta:is(:hover, :focus-visible),
+.shiny-cta:is(:hover, :focus-visible)::before,
+.shiny-cta:is(:hover, :focus-visible)::after { animation-play-state: running; }
+.shiny-cta:is(:hover, :focus-visible) span::before { opacity: 1; }
+
+@keyframes gradient-angle { to { --gradient-angle: 360deg; } }
+@keyframes shimmer { to { rotate: 360deg; } }
+@keyframes breathe { from, to { scale: 1; } 50% { scale: 1.2; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .shiny-cta, .shiny-cta::before, .shiny-cta::after, .shiny-cta span::before { animation: none !important; }
 }

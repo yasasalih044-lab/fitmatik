@@ -5,7 +5,7 @@ import { Camera, PencilLine } from "lucide-react";
 import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
 import TokenMeter from "@/components/TokenMeter";
-import { LiquidMetalButton } from "@/components/ui/liquid-metal-button";
+import { ShinyButton } from "@/components/ui/shiny-button";
 import { ShiningText } from "@/components/ui/shining-text";
 import { confidenceLabel, currentDayStart, kcal, todayKey, dayKey } from "@/lib/format";
 import type { AnalyzeResult, Entry, TokenUsage } from "@/lib/types";
@@ -241,12 +241,9 @@ export default function UploadClient() {
 
         <div className="meal-action">
           <p>{canSubmit ? "Hazır olduğunda hesaplamayı başlat." : mode === "text" ? "Yemeğini birkaç kelimeyle anlat." : "Önce paket fotoğrafını ekle."}</p>
-          <LiquidMetalButton
-            label={busy ? "Hesaplanıyor…" : "Kalorini hesapla"}
-            onClick={submit}
-            disabled={!canSubmit || busy}
-            fullWidth
-          />
+          <ShinyButton onClick={submit} disabled={!canSubmit || busy}>
+            {busy ? "Hesaplanıyor…" : "Kalorini hesapla"}
+          </ShinyButton>
         </div>
       </section>
 

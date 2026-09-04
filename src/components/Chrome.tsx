@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import BackgroundPicker from "./BackgroundPicker";
 import { normalizeTheme, THEME_KEY } from "@/lib/theme";
 import { useEffect, useState } from "react";
 
@@ -44,6 +45,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <BackgroundPicker />
       <div className="app-page-art" aria-hidden />
       <div className="app-shell">
         <header className="app-header safe-top">

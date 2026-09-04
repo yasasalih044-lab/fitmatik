@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, BadgeCheck, Check, Eye, EyeOff, LockKeyhole, Smartphone, UserRound } from "lucide-react";
 import ThemeSwitch from "@/components/ThemeSwitch";
+import BackgroundPicker from "@/components/BackgroundPicker";
 import PasswordStrength from "@/components/ui/password-strength";
 import { LiquidMetalButton } from "@/components/ui/liquid-metal-button";
 import { ShiningText } from "@/components/ui/shining-text";
@@ -235,6 +236,7 @@ export default function AuthExperience({ experience = "auth" }: { experience?: E
 
   return (
     <main className="auth-page">
+      <BackgroundPicker />
       <div className="auth-page__content">
         <header className="auth-page__header">
           <Link href="/" className="auth-logo" aria-label="Fit-matik ana sayfa" />

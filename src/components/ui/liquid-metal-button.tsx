@@ -76,7 +76,28 @@ export function LiquidMetalButton({
       shaderMount.current = null;
     }
 
+    // ShaderMount canvas'ı 300x150 varsayılanında bırakabiliyor; o zaman desen
+    // düğmenin yalnızca bir kısmını kaplıyor. Tamponu kutuya göre eşitle.
+    const host = shaderRef.current;
+    const syncCanvas = () => {
+      const canvas = host.querySelector("canvas");
+      if (!canvas) return;
+      const { width, height } = host.getBoundingClientRect();
+      if (!width || !height) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.round(width * dpr);
+      const h = Math.round(height * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+    };
+    syncCanvas();
+    const observer = new ResizeObserver(syncCanvas);
+    observer.observe(host);
+
     return () => {
+      observer.disconnect();
       shaderMount.current?.dispose();
       shaderMount.current = null;
     };
