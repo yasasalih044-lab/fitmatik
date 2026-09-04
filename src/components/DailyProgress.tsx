@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
 import { kcal } from "@/lib/format";
-import { DEFAULT_TARGETS, writeTargets, type Targets } from "@/lib/targets";
+import type { Targets } from "@/lib/accounts";
 
 type Totals = { kcal: number; protein_g: number; carbs_g: number; fat_g: number };
 
@@ -40,67 +40,22 @@ function Bar({ label, value, target, unit }: { label: string; value: number; tar
   );
 }
 
-export default function DailyProgress({
-  totals,
-  targets,
-  onChange,
-}: {
-  totals: Totals;
-  targets: Targets;
-  onChange: (t: Targets) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(targets);
-
-  function save() {
-    writeTargets(draft);
-    onChange(draft);
-    setEditing(false);
-  }
-
+export default function DailyProgress({ totals, targets }: { totals: Totals; targets: Targets }) {
   return (
     <section className="card space-y-4 p-4">
       <div className="flex items-center justify-between">
         <p className="eyebrow">Günlük hedef</p>
-        <button onClick={() => { setDraft(targets); setEditing((v) => !v); }} className="btn btn-quiet text-[11px]">
-          {editing ? "Vazgeç" : "Düzenle"}
-        </button>
+        <Link href="/ayarlar" className="btn btn-quiet text-[11px]">
+          Düzenle
+        </Link>
       </div>
 
-      {editing ? (
-        <div className="space-y-3">
-          {([
-            ["kcal", "Kalori (kcal)"],
-            ["protein_g", "Protein (g)"],
-            ["carbs_g", "Karbonhidrat (g)"],
-            ["fat_g", "Yağ (g)"],
-          ] as const).map(([k, label]) => (
-            <label key={k} className="flex items-center justify-between gap-3">
-              <span className="text-[13px] text-[var(--muted)]">{label}</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={String(draft[k])}
-                onChange={(e) => setDraft({ ...draft, [k]: Number(e.target.value.replace(/\D/g, "")) || 0 })}
-                className="mono w-24 py-2 text-center text-[14px]"
-              />
-            </label>
-          ))}
-          <div className="flex gap-2">
-            <button onClick={save} className="btn btn-primary flex-1 py-2.5 text-sm">Kaydet</button>
-            <button onClick={() => setDraft(DEFAULT_TARGETS)} className="btn btn-ghost px-3 py-2.5 text-[13px]">
-              Varsayılan
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Bar label="Kalori" value={totals.kcal} target={targets.kcal} unit="kcal" />
-          <Bar label="Protein" value={totals.protein_g} target={targets.protein_g} unit="g" />
-          <Bar label="Karbonhidrat" value={totals.carbs_g} target={targets.carbs_g} unit="g" />
-          <Bar label="Yağ" value={totals.fat_g} target={targets.fat_g} unit="g" />
-        </div>
-      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Bar label="Kalori" value={totals.kcal} target={targets.kcal} unit="kcal" />
+        <Bar label="Protein" value={totals.protein_g} target={targets.protein_g} unit="g" />
+        <Bar label="Karbonhidrat" value={totals.carbs_g} target={targets.carbs_g} unit="g" />
+        <Bar label="Yağ" value={totals.fat_g} target={targets.fat_g} unit="g" />
+      </div>
     </section>
   );
 }

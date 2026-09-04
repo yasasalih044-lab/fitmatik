@@ -210,6 +210,34 @@ async function deleteImage(publicUrl: string): Promise<void> {
   if (error) console.error(`[fitmatik] görsel silinemedi (${path}): ${error.message}`);
 }
 
+/* --- Genel JSON nesne yardımcıları (hesaplar, profil, hedefler) ---------- */
+
+export async function getJsonObject<T>(path: string): Promise<T | null> {
+  if (!supabaseConfigured()) return null;
+  const { data, error } = await db().storage.from(BUCKET).download(path);
+  if (error || !data) return null;
+  try {
+    return JSON.parse(await data.text()) as T;
+  } catch {
+    console.error(`[fitmatik] ${path} bozuk JSON.`);
+    return null;
+  }
+}
+
+export async function putJsonObject(path: string, value: unknown): Promise<void> {
+  if (!supabaseConfigured()) throw new Error("Depolama yapılandırılmamış.");
+  const body = new Blob([JSON.stringify(value)], { type: "application/json" });
+  const { error } = await db()
+    .storage.from(BUCKET)
+    .upload(path, body, { contentType: "application/json", cacheControl: "0", upsert: true });
+  if (error) throw new Error(`Kayıt yazılamadı: ${error.message}`);
+}
+
+export async function removeObject(path: string): Promise<void> {
+  if (!supabaseConfigured()) return;
+  await db().storage.from(BUCKET).remove([path]);
+}
+
 /** Görseli Storage'a yükler, public URL döndürür. Yapılandırma yoksa null. */
 export async function uploadImage(dataUrl: string): Promise<string | null> {
   if (!supabaseConfigured()) return null;

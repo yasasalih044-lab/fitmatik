@@ -25,9 +25,9 @@ const THEME_OPTIONS: ReadonlyArray<{
   shortLabel: string;
   description: string;
 }> = [
-  { id: "kagit", label: "Pembe", shortLabel: "P", description: "Canlı, cesur ve sıcak." },
-  { id: "pegasus", label: "Kırmızı", shortLabel: "K", description: "Ejderha gücü, altın detaylar." },
-  { id: "karbon", label: "Siyah", shortLabel: "S", description: "Sessiz, sert ve net." },
+  { id: "pembe", label: "Pembe", shortLabel: "P", description: "Canlı, cesur ve sıcak." },
+  { id: "kirmizi", label: "Kırmızı", shortLabel: "K", description: "Ejderha gücü, altın detaylar." },
+  { id: "siyah", label: "Siyah", shortLabel: "S", description: "Sessiz, sert ve net." },
 ];
 
 const EMPTY_CREDENTIALS: Credentials = { phone: "", password: "" };
@@ -87,7 +87,7 @@ export default function AuthExperience({ experience = "auth" }: { experience?: E
   const [step, setStep] = useState<SignupStep>(experience === "onboarding" ? "profile" : "credentials");
   const [credentials, setCredentials] = useState<Credentials>(EMPTY_CREDENTIALS);
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
-  const [theme, setTheme] = useState<ThemeId>("kagit");
+  const [theme, setTheme] = useState<ThemeId>("pembe");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

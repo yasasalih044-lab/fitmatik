@@ -1,22 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { COOKIE, expectedToken, pinRequired } from "@/lib/auth";
+import { readSession, SESSION_COOKIE } from "@/lib/accounts";
 
-const PUBLIC = ["/login", "/api/auth", "/api/health", "/manifest.webmanifest", "/icon", "/apple-icon", "/favicon.ico", "/motif"];
+/** Oturum gerektirmeyen yollar. */
+const PUBLIC = [
+  "/login", "/kayit",
+  "/api/auth", "/api/health",
+  "/manifest.webmanifest", "/icon", "/apple-icon", "/favicon.ico",
+  "/marka", "/auth",
+];
+
+const isPublic = (p: string) => PUBLIC.some((x) => p === x || p.startsWith(`${x}/`));
 
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (!pinRequired()) return NextResponse.next();
-  if (PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"))) return NextResponse.next();
+  if (isPublic(pathname)) return NextResponse.next();
 
-  const token = req.cookies.get(COOKIE)?.value;
-  if (token && token === (await expectedToken())) return NextResponse.next();
+  const userId = readSession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (userId) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   }
+
   const url = req.nextUrl.clone();
   url.pathname = "/login";
-  url.searchParams.set("next", pathname);
+  // Girişten sonra kullanıcıyı geldiği yere geri götür; yalnızca site içi yollar.
+  if (pathname !== "/") url.searchParams.set("next", pathname);
   return NextResponse.redirect(url);
 }
 

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { driver, supabaseConfigured } from "@/lib/store";
 import { MODEL } from "@/lib/openai";
-import { pinRequired } from "@/lib/auth";
 import { configured as fatsecretConfigured, searchFoods, FatSecretIpError } from "@/lib/fatsecret";
 
 /** FatSecret'e canlı bir sorgu atıp durumu döndürür — log kazmadan teşhis için. */
@@ -50,7 +49,6 @@ export async function GET(req: Request) {
     fatsecret: fatsecretConfigured(),
     fatsecret_probe,
     outbound_ip,
-    pin_protected: pinRequired(),
     time: new Date().toISOString(),
   });
 }

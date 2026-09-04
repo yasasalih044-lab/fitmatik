@@ -5,7 +5,7 @@ import Link from "next/link";
 import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
 import DailyProgress from "@/components/DailyProgress";
-import { readTargets, type Targets, DEFAULT_TARGETS } from "@/lib/targets";
+import type { Targets } from "@/lib/accounts";
 import { confidenceLabel, dayKey, dayLabel, kcal, shiftKey, timeLabel, todayKey } from "@/lib/format";
 import type { Entry } from "@/lib/types";
 
@@ -18,9 +18,15 @@ export default function DashboardClient() {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const [targets, setTargets] = useState<Targets>(DEFAULT_TARGETS);
+  const [targets, setTargets] = useState<Targets | null>(null);
 
-  useEffect(() => setTargets(readTargets()), []);
+  // Hedefler hesaba bağlı; tarayıcıda değil sunucuda duruyor.
+  useEffect(() => {
+    fetch("/api/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.account && setTargets(d.account.targets))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     void load();
@@ -112,7 +118,7 @@ export default function DashboardClient() {
           />
         </div>
 
-        <DailyProgress totals={todayTotals} targets={targets} onChange={setTargets} />
+        {targets && <DailyProgress totals={todayTotals} targets={targets} />}
 
         {today ? (
           <DayList day={today} onDelete={remove} open={open} setOpen={setOpen} />

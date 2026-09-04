@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { DEFAULT_THEME, isTheme, THEMES, THEME_KEY, type ThemeId } from "@/lib/theme";
 
 const labels: Record<ThemeId, string> = {
-  kagit: "Pembe",
-  pegasus: "Kırmızı",
-  karbon: "Siyah",
+  pembe: "Pembe",
+  kirmizi: "Kırmızı",
+  siyah: "Siyah",
 };
 const THEME_CHANGE_EVENT = "fitmatik:theme-change";
 
