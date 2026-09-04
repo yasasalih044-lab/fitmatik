@@ -5,7 +5,8 @@
 /* Zemin: sıcak kağıt. Metin: mürekkep siyahı. Vurgu: sinyal kırmızısı */
 /* (dövme motiflerinden alındı). İmza öğe: kalori aralığı çubuğu.      */
 /* ------------------------------------------------------------------ */
-:root {
+:root,
+[data-theme="kagit"] {
   --paper:   #f2eee5;
   --card:    #fbf9f4;
   --sunk:    #e9e3d6;
@@ -16,7 +17,52 @@
   --rule:    #d8d1c0;
   --red:     #d2141f;
   --red-ink: #8e0d15;
+  --on-red:  #ffffff;
+  --field:   #ffffff;
+  --grain:   0.055;
+  --motif-alpha: .22;
   --radius:  7px;
+  color-scheme: light;
+}
+
+/* Pegasus — gece göğü, kırmızı vurgu. */
+[data-theme="pegasus"] {
+  --paper:   #07070a;
+  --card:    #101016;
+  --sunk:    #1b1b23;
+  --ink:     #f2f0ee;
+  --ink-2:   #cdcac6;
+  --muted:   #9a968f;
+  --faint:   #6a6660;
+  --rule:    #26262f;
+  --red:     #e01414;
+  --red-ink: #ff3b3b;
+  --on-red:  #ffffff;
+  --field:   #15151c;
+  --grain:   0.03;
+  --motif-alpha: .34;
+  --radius:  7px;
+  color-scheme: dark;
+}
+
+/* Karbon — nötr koyu, kırmızı yerine kum vurgusu. */
+[data-theme="karbon"] {
+  --paper:   #16181a;
+  --card:    #1e2124;
+  --sunk:    #282c30;
+  --ink:     #eceef0;
+  --ink-2:   #c6cacd;
+  --muted:   #939a9f;
+  --faint:   #676e73;
+  --rule:    #32373c;
+  --red:     #e0a145;
+  --red-ink: #f2b968;
+  --on-red:  #1a1408;
+  --field:   #202326;
+  --grain:   0.04;
+  --motif-alpha: .28;
+  --radius:  7px;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -37,18 +83,27 @@
 
 html {
   background: var(--paper);
-  color-scheme: light;
 }
 
 body {
   color: var(--ink);
+  background: var(--paper);
+  transition: background-color .25s ease, color .25s ease;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
   overscroll-behavior-y: none;
-  /* Kağıt taneciği — tek bir satır içi SVG, ek istek yok */
-  background-color: var(--paper);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.055'/></svg>");
+}
+
+/* Kağıt taneciği — tek satır içi SVG, ek istek yok. Yoğunluğu tema belirler. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--grain, .05);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
 }
 
 @layer components {
@@ -89,7 +144,7 @@ body {
   }
   .btn:active:not(:disabled) { transform: scale(.985); }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
-  .btn-primary { background: var(--red); color: #fff; letter-spacing: .01em; }
+  .btn-primary { background: var(--red); color: var(--on-red); letter-spacing: .01em; }
   .btn-primary:hover:not(:disabled) { background: var(--red-ink); }
   .btn-ghost { background: transparent; border-color: var(--rule); color: var(--ink); }
   .btn-ghost:hover:not(:disabled) { background: var(--sunk); }
@@ -114,7 +169,7 @@ body {
 @layer base {
   button, input, textarea, select { font: inherit; color: inherit; }
   textarea, input[type="text"], input[type="password"] {
-    background: #fff;
+    background: var(--field);
     border: 1px solid var(--rule);
     border-radius: 6px;
     width: 100%;
@@ -125,7 +180,7 @@ body {
   textarea::placeholder, input::placeholder { color: var(--faint); }
   textarea:focus, input:focus {
     border-color: var(--red);
-    box-shadow: 0 0 0 3px rgb(210 20 31 / 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 22%, transparent);
   }
   :focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 }
@@ -136,7 +191,7 @@ body {
 
 /* --- Köşe motifi: her açılışta biri, içeriğin arkasında ------------ */
 .motif {
-  --motif-opacity: .22;
+  --motif-opacity: var(--motif-alpha, .22);
   position: fixed;
   z-index: 0;
   pointer-events: none;

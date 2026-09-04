@@ -8,6 +8,10 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# NEXT_PUBLIC_* değişkenleri istemci paketine derleme sırasında gömülür;
+# Coolify'da değiştirmek için "Build Variable" olarak işaretlenmeli.
+ARG NEXT_PUBLIC_DAY_START_HOUR=12
+ENV NEXT_PUBLIC_DAY_START_HOUR=$NEXT_PUBLIC_DAY_START_HOUR
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

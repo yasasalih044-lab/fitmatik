@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
-import { confidenceLabel, dayKey, dayLabel, kcal, timeLabel, todayKey } from "@/lib/format";
+import DailyProgress from "@/components/DailyProgress";
+import { readTargets, type Targets, DEFAULT_TARGETS } from "@/lib/targets";
+import { confidenceLabel, dayKey, dayLabel, kcal, shiftKey, timeLabel, todayKey } from "@/lib/format";
 import type { Entry } from "@/lib/types";
 
 const gram = (v: number | null) =>
@@ -16,6 +18,9 @@ export default function DashboardClient() {
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  const [targets, setTargets] = useState<Targets>(DEFAULT_TARGETS);
+
+  useEffect(() => setTargets(readTargets()), []);
 
   useEffect(() => {
     void load();
@@ -69,6 +74,12 @@ export default function DashboardClient() {
   }, [entries]);
 
   const today = days.find((d) => d.key === todayKey());
+  const todayTotals = {
+    kcal: today?.best ?? 0,
+    protein_g: sumOf(today, "protein_g"),
+    carbs_g: sumOf(today, "carbs_g"),
+    fat_g: sumOf(today, "fat_g"),
+  };
   const chart = useMemo(() => lastDays(days, 14), [days]);
   const peak = Math.max(1, ...chart.map((d) => d.best));
 
@@ -100,6 +111,8 @@ export default function DashboardClient() {
             scaleMax={Math.max(peak, today?.max ?? 0)}
           />
         </div>
+
+        <DailyProgress totals={todayTotals} targets={targets} onChange={setTargets} />
 
         {today ? (
           <DayList day={today} onDelete={remove} open={open} setOpen={setOpen} />
@@ -246,14 +259,19 @@ function EntryRow({ entry, scaleMax, open, onToggle, onDelete }: { entry: Entry;
   );
 }
 
+/** Bir günün makro toplamı; kayıt düzeyindeki değerler null olabilir. */
+function sumOf(day: Day | undefined, key: "protein_g" | "carbs_g" | "fat_g"): number {
+  if (!day) return 0;
+  return day.entries.reduce((a, e) => a + (typeof e[key] === "number" ? (e[key] as number) : 0), 0);
+}
+
 /** Kayıt olmayan günler de çubukta yer alsın; boşluk da bilgidir. */
 function lastDays(days: Day[], n: number) {
   const byKey = new Map(days.map((d) => [d.key, d]));
+  const today = todayKey();
   const out: { key: string; best: number }[] = [];
   for (let i = n - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const key = dayKey(d.toISOString());
+    const key = shiftKey(today, -i);
     out.push({ key, best: byKey.get(key)?.best ?? 0 });
   }
   return out;

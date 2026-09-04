@@ -66,6 +66,7 @@ export async function POST(req: Request) {
       verdict: result.verdict,
       sources: result.sources,
       model: result.model,
+      tokens: result.usage.total || null,
     });
 
     return NextResponse.json({ result, entry });
@@ -113,4 +114,5 @@ const MOCK: AnalyzeResult = {
   ],
   model: "mock",
   elapsed_ms: 0,
+  usage: { input: 1240, output: 860, total: 2100 },
 };

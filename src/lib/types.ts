@@ -35,6 +35,9 @@ export type Macros = {
 
 export type WebSource = { title: string; url: string };
 
+/** Bir analizin OpenAI token maliyeti — arayüzde sağ altta gösterilir. */
+export type TokenUsage = { input: number; output: number; total: number };
+
 export type AnalyzeResult = {
   title: string;
   source: Source;
@@ -49,6 +52,7 @@ export type AnalyzeResult = {
   sources: WebSource[];
   model: string;
   elapsed_ms: number;
+  usage: TokenUsage;
   /** Görsel paketli gıda değilse doldurulur */
   rejected?: { reason: string };
 };
@@ -72,6 +76,7 @@ export type Entry = {
   verdict: string;
   sources: WebSource[];
   model: string | null;
+  tokens: number | null;
 };
 
 export type DaySummary = {

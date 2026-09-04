@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
-import { confidenceLabel, kcal, todayKey, dayKey } from "@/lib/format";
-import type { AnalyzeResult, Entry } from "@/lib/types";
+import TokenMeter from "@/components/TokenMeter";
+import { confidenceLabel, currentDayStart, kcal, todayKey, dayKey } from "@/lib/format";
+import type { AnalyzeResult, Entry, TokenUsage } from "@/lib/types";
 
 type Mode = "text" | "image";
 type Phase = "idle" | "parsing" | "researching";
@@ -46,6 +47,8 @@ export default function UploadClient() {
   const [entry, setEntry] = useState<Entry | null>(null);
   const [error, setError] = useState<string>("");
   const [todayTotal, setTodayTotal] = useState<number | null>(null);
+  const [lastUsage, setLastUsage] = useState<TokenUsage | null>(null);
+  const [sessionUsage, setSessionUsage] = useState<TokenUsage>({ input: 0, output: 0, total: 0 });
   const fileRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -57,9 +60,8 @@ export default function UploadClient() {
 
   async function refreshToday() {
     try {
-      // Yalnızca bugünü iste — depolama sürücüsünde iş yükünü sınırlar.
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
+      // Yalnızca içinde bulunduğumuz günlük bloğu iste.
+      const start = currentDayStart();
       const res = await fetch(`/api/entries?from=${encodeURIComponent(start.toISOString())}&limit=100`, {
         cache: "no-store",
       });
@@ -110,6 +112,15 @@ export default function UploadClient() {
       if (!res.ok) throw new Error(data.error || `İstek başarısız (${res.status}).`);
       setResult(data.result!);
       setEntry(data.entry ?? null);
+      const u = data.result?.usage;
+      if (u) {
+        setLastUsage(u);
+        setSessionUsage((prev) => ({
+          input: prev.input + u.input,
+          output: prev.output + u.output,
+          total: prev.total + u.total,
+        }));
+      }
       if (data.entry) void refreshToday();
       requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (e) {
@@ -145,6 +156,7 @@ export default function UploadClient() {
 
   return (
     <div className="space-y-5 pb-10">
+      <TokenMeter last={lastUsage} session={sessionUsage} />
       {/* Bugünkü toplam — kayıt eklemenin neden önemli olduğunu hep göster */}
       <div className="flex items-baseline justify-between">
         <p className="eyebrow">Bugün</p>

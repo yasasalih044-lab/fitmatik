@@ -1,5 +1,6 @@
 import { gramsFromText, lookupBarcode, scaleToGrams, searchProducts, type FoodFact } from "./foodDb";
-import type { AnalyzeResult, Basis, FoodItem, Source, WebSource } from "./types";
+import * as fs from "./fatsecret";
+import type { AnalyzeResult, Basis, FoodItem, Source, TokenUsage, WebSource } from "./types";
 
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 
@@ -27,7 +28,7 @@ type ResponsesBody = {
 };
 
 /** Responses API çağrısı; web_search aracı desteklenmiyorsa aşamalı olarak geri düşer. */
-async function callOpenAI(body: ResponsesBody, withSearch: boolean): Promise<{ text: string; citations: WebSource[] }> {
+async function callOpenAI(body: ResponsesBody, withSearch: boolean): Promise<{ text: string; citations: WebSource[]; usage: TokenUsage }> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new OpenAIError("OPENAI_API_KEY tanımlı değil.", "missing_key", 500);
 
@@ -78,8 +79,21 @@ async function callOpenAI(body: ResponsesBody, withSearch: boolean): Promise<{ t
   throw lastErr ?? new OpenAIError("OpenAI çağrısı başarısız.");
 }
 
-function extractText(data: Record<string, unknown>): { text: string; citations: WebSource[] } {
+const noUsage = (): TokenUsage => ({ input: 0, output: 0, total: 0 });
+const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
+  input: a.input + b.input,
+  output: a.output + b.output,
+  total: a.total + b.total,
+});
+
+function extractText(data: Record<string, unknown>): { text: string; citations: WebSource[]; usage: TokenUsage } {
   const output = (data.output as unknown[]) || [];
+  const u = (data.usage || {}) as Record<string, unknown>;
+  const usage: TokenUsage = {
+    input: Number(u.input_tokens) || 0,
+    output: Number(u.output_tokens) || 0,
+    total: Number(u.total_tokens) || (Number(u.input_tokens) || 0) + (Number(u.output_tokens) || 0),
+  };
   let text = "";
   const citations: WebSource[] = [];
 
@@ -108,7 +122,7 @@ function extractText(data: Record<string, unknown>): { text: string; citations: 
     );
   }
 
-  return { text, citations };
+  return { text, citations, usage };
 }
 
 function parseJson<T>(text: string, label: string): T {
@@ -233,7 +247,7 @@ Kabul edilen görselde:
 - grams_est: tüketilen gram. Kullanıcı "yarısını yedim" dediyse ambalaj gramajının yarısı.
 - Yalnızca JSON döndür.`;
 
-async function stage1Parse(opts: { source: Source; text?: string; imageDataUrl?: string }): Promise<ParseOut> {
+async function stage1Parse(opts: { source: Source; text?: string; imageDataUrl?: string }): Promise<{ parsed: ParseOut; usage: TokenUsage }> {
   const content: unknown[] = [];
 
   if (opts.source === "image") {
@@ -248,7 +262,7 @@ async function stage1Parse(opts: { source: Source; text?: string; imageDataUrl?:
     content.push({ type: "input_text", text: opts.text || "" });
   }
 
-  const { text } = await callOpenAI(
+  const { text, usage } = await callOpenAI(
     {
       model: MODEL,
       instructions: opts.source === "image" ? PARSE_IMAGE_INSTRUCTIONS : PARSE_TEXT_INSTRUCTIONS,
@@ -260,7 +274,7 @@ async function stage1Parse(opts: { source: Source; text?: string; imageDataUrl?:
     false,
   );
 
-  return parseJson<ParseOut>(text, "Ayrıştırma");
+  return { parsed: parseJson<ParseOut>(text, "Ayrıştırma"), usage };
 }
 
 /* ------------------------------------------------------------------ */
@@ -393,8 +407,8 @@ async function stage2Research(
   parsed: ParseOut,
   source: Source,
   facts: (FoodFact | null)[],
-): Promise<{ out: ResearchOut; citations: WebSource[] }> {
-  const { text, citations } = await callOpenAI(
+): Promise<{ out: ResearchOut; citations: WebSource[]; usage: TokenUsage }> {
+  const { text, citations, usage } = await callOpenAI(
     {
       model: MODEL,
       instructions: RESEARCH_INSTRUCTIONS,
@@ -422,7 +436,7 @@ async function stage2Research(
     true,
   );
 
-  return { out: parseJson<ResearchOut>(text, "Araştırma"), citations };
+  return { out: parseJson<ResearchOut>(text, "Araştırma"), citations, usage };
 }
 
 /* ------------------------------------------------------------------ */
@@ -490,19 +504,73 @@ function pickBest(hits: FoodFact[], item: ParseOut["items"][number]): FoodFact |
   return null; // Emin değilsek eşleşme yok de; web araştırması devreye girsin.
 }
 
-async function lookupFacts(items: ParseOut["items"]): Promise<(FoodFact | null)[]> {
-  return Promise.all(
-    items.map(async (it) => {
+/** FatSecret sonucunu ortak FoodFact şekline çevir (100 g başına değerlerle). */
+async function factFromFatSecret(hit: fs.FsFood): Promise<FoodFact | null> {
+  const detail = await fs.getFood(hit.id);
+  if (!detail) return null;
+  const p100 = fs.per100g(detail);
+  if (!p100 || p100.kcal === null) return null;
+
+  // Ambalaj gramajı: metrik olmayan ama "1 paket" gibi tarif edilen porsiyondan çıkar.
+  const pack = detail.servings.find((sv) => /paket|package|bar|adet|piece/i.test(sv.description));
+  return {
+    source: "fatsecret",
+    code: detail.id,
+    name: detail.name,
+    brand: detail.brand,
+    quantity: pack?.metric_amount ? `${pack.metric_amount} ${pack.metric_unit || "g"}` : null,
+    serving_size: detail.servings[0]?.description ?? null,
+    kcal_100g: p100.kcal,
+    protein_100g: p100.protein_g,
+    carbs_100g: p100.carbs_g,
+    fat_100g: p100.fat_g,
+    fiber_100g: null,
+    url: detail.url || `https://www.fatsecret.com.tr/kaloriler-beslenme/search?q=${encodeURIComponent(detail.name)}`,
+  };
+}
+
+export type LookupOutcome = { facts: (FoodFact | null)[]; ipBlocked: string | null };
+
+async function lookupFacts(items: ParseOut["items"]): Promise<LookupOutcome> {
+  let ipBlocked: string | null = null;
+
+  const facts = await Promise.all(
+    items.map(async (it): Promise<FoodFact | null> => {
+      // 1) Barkod, ürünün kimliği. FatSecret'te barkod Premier kapsamında,
+      //    Open Food Facts'te ücretsiz — o yüzden barkodu OFF'tan çözüyoruz.
       if (it.barcode) {
         const byCode = await lookupBarcode(it.barcode);
         if (byCode) return byCode;
       }
-      // Ev yemeğinin ambalajı yok; veritabanında aramanın anlamı yok.
+      // Ev yemeğinin ambalajı yok; markalı ürün veritabanında aramanın anlamı yok.
       if (!it.packaged && !it.brand) return null;
+
       const q = (it.db_query || `${it.brand || ""} ${it.name}`).trim();
+
+      // 2) FatSecret — Türkiye kapsamı OFF'tan çok daha iyi, birincil kaynak.
+      try {
+        const hits = await fs.searchFoods(q, 5);
+        for (const h of hits) {
+          const candidate: FoodFact = {
+            source: "fatsecret", code: h.id, name: h.name, brand: h.brand,
+            quantity: null, serving_size: null, kcal_100g: 1,
+            protein_100g: null, carbs_100g: null, fat_100g: null, fiber_100g: null, url: h.url,
+          };
+          if (!pickBest([candidate], it)) continue; // ad eşleşmiyorsa ayrıntıyı çekme
+          const full = await factFromFatSecret(h);
+          if (full) return full;
+        }
+      } catch (e) {
+        if (e instanceof fs.FatSecretIpError) ipBlocked = e.ip;
+        else throw e;
+      }
+
+      // 3) Open Food Facts — FatSecret bulamazsa.
       return pickBest(await searchProducts(q, 4), it);
     }),
   );
+
+  return { facts, ipBlocked };
 }
 
 /* ------------------------------------------------------------------ */
@@ -611,7 +679,8 @@ function buildVerdict(items: FoodItem[], min: number, max: number, best: number)
 export async function analyzeMeal(opts: { source: Source; text?: string; imageDataUrl?: string }): Promise<AnalyzeResult> {
   const started = Date.now();
 
-  const parsed = await stage1Parse(opts);
+  const { parsed, usage: parseUsage } = await stage1Parse(opts);
+  let usage = parseUsage;
 
   if (!parsed.accepted || parsed.items.length === 0) {
     return {
@@ -627,14 +696,17 @@ export async function analyzeMeal(opts: { source: Source; text?: string; imageDa
       sources: [],
       model: MODEL,
       elapsed_ms: Date.now() - started,
+      usage,
       rejected: { reason: parsed.reject_reason || "Girdi anlaşılamadı." },
     };
   }
 
   // Veritabanı eşleştirmesi araştırmayla aynı anda başlayamaz: sonucu
   // araştırmaya bağlayıcı girdi olarak veriyoruz.
-  const facts = await lookupFacts(parsed.items);
-  const { out, citations } = await stage2Research(parsed, opts.source, facts);
+  const { facts, ipBlocked } = await lookupFacts(parsed.items);
+  if (ipBlocked) console.warn(`[fitmatik] FatSecret IP engeli: ${ipBlocked} — panele ekle.`);
+  const { out, citations, usage: researchUsage } = await stage2Research(parsed, opts.source, facts);
+  usage = addUsage(usage, researchUsage);
 
   const items = (out.items || []).map((it, i) => settleItem(it, parsed.items[i], facts[i] ?? null));
 
@@ -677,5 +749,6 @@ export async function analyzeMeal(opts: { source: Source; text?: string; imageDa
     sources: dedupeSources(dbSources, out.sources || [], citations),
     model: MODEL,
     elapsed_ms: Date.now() - started,
+    usage,
   };
 }

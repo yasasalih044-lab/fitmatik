@@ -19,6 +19,8 @@ const FIELDS = [
 ].join(",");
 
 export type FoodFact = {
+  /** Verinin geldiği yer — kullanıcıya kaynak olarak gösterilir. */
+  source: "openfoodfacts" | "fatsecret";
   code: string;
   name: string;
   brand: string | null;
@@ -84,6 +86,7 @@ function toFact(p: Record<string, unknown> | undefined | null): FoodFact | null 
       : null;
 
   return {
+    source: "openfoodfacts",
     code: String(p.code),
     name: name.trim(),
     brand: brand || null,

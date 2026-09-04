@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Motif from "./Motif";
+import ThemeSwitch from "./ThemeSwitch";
 
 export default function Chrome({ children }: { children: React.ReactNode }) {
   const path = usePathname();
@@ -31,7 +32,9 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
             <span className="block h-5 w-[5px] -skew-x-12 bg-[var(--red)]" />
             <span className="display text-[22px] uppercase tracking-[-0.01em]">Fit-matik</span>
           </Link>
-          <nav className="flex items-center gap-0.5 rounded-md border border-[var(--rule)] bg-[var(--card)] p-0.5">
+          <div className="flex items-center gap-3">
+            <ThemeSwitch />
+            <nav className="flex items-center gap-0.5 rounded-md border border-[var(--rule)] bg-[var(--card)] p-0.5">
             {tabs.map((t) => {
               const active = path === t.href;
               return (
@@ -47,7 +50,8 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-          </nav>
+            </nav>
+          </div>
         </header>
 
         {storeWarning && (

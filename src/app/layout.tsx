@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Big_Shoulders, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { DEFAULT_THEME, THEME_BOOT_SCRIPT } from "@/lib/theme";
 
 const shoulders = Big_Shoulders({
   variable: "--font-shoulders",
@@ -37,7 +38,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr">
+    <html lang="tr" data-theme={DEFAULT_THEME} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className={`${shoulders.variable} ${instrument.variable} ${jetbrains.variable}`}>{children}</body>
     </html>
   );

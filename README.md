@@ -71,6 +71,10 @@ Kova `application/json` MIME tipine izin vermelidir (Storage sürücüsü için)
 | `SUPABASE_URL` | evet | Proje URL'i |
 | `SUPABASE_SERVICE_ROLE_KEY` | evet | Service role anahtarı — asla istemciye gitmez |
 | `SUPABASE_BUCKET` | hayır | Varsayılan `fitmatik` |
+| `FATSECRET_CLIENT_ID` | hayır | FatSecret Platform API anahtarı |
+| `FATSECRET_CLIENT_SECRET` | hayır | FatSecret gizli anahtarı |
+| `FATSECRET_REGION` | hayır | Varsayılan `TR` |
+| `NEXT_PUBLIC_DAY_START_HOUR` | hayır | Günün başladığı saat, varsayılan `12` (derleme zamanı) |
 | `APP_PIN` | hayır | Boşsa site herkese açık olur |
 | `APP_SECRET` | hayır | PIN çerezi için tuz |
 
