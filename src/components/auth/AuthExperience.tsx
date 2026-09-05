@@ -10,7 +10,7 @@ import BackgroundPicker from "@/components/BackgroundPicker";
 import PasswordStrength from "@/components/ui/password-strength";
 import { LiquidMetalButton } from "@/components/ui/liquid-metal-button";
 import { ShiningText } from "@/components/ui/shining-text";
-import { THEME_KEY, isTheme, type ThemeId } from "@/lib/theme";
+import { rememberTheme, isTheme, type ThemeId } from "@/lib/theme";
 
 type AuthMode = "giris" | "kayit";
 type SignupStep = "credentials" | "profile" | "theme";
@@ -116,16 +116,11 @@ export default function AuthExperience({ experience = "auth" }: { experience?: E
   }
 
   function chooseTheme(id: ThemeId) {
-    document.documentElement.dataset.theme = id;
+    rememberTheme(id);
     setTheme(id);
     const color = getComputedStyle(document.documentElement).getPropertyValue("--browser-theme").trim();
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", color);
     window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: id }));
-    try {
-      localStorage.setItem(THEME_KEY, id);
-    } catch {
-      // Tema seçimi özel sekmede yalnızca açık oturum boyunca kalabilir.
-    }
   }
 
   function openGoogle() {

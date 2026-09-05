@@ -7,6 +7,10 @@
 /* ------------------------------------------------------------------ */
 :root,
 [data-theme="pembe"] {
+  --macro-protein: #ff2d9b;
+  --macro-carbs: #ff8fc5;
+  --macro-fat: #b45c8a;
+  --macro-rest: color-mix(in srgb, var(--ink) 22%, transparent);
   --logo: url("/marka/logo-beyaz.webp");
   --shiny-highlight: #ff2d9b;
   --shiny-highlight-subtle: #ff9ed0;
@@ -54,6 +58,10 @@
 
 /* Kırmızı — ejderha, ateş ve altın detay. */
 [data-theme="kirmizi"] {
+  --macro-protein: #e0141f;
+  --macro-carbs: #f0a13a;
+  --macro-fat: #a8452c;
+  --macro-rest: color-mix(in srgb, var(--ink) 22%, transparent);
   --logo: url("/marka/logo-beyaz.webp");
   --shiny-highlight: #e0141f;
   --shiny-highlight-subtle: #ff8a8a;
@@ -100,6 +108,10 @@
 
 /* Siyah — monokrom ejderha, metalik sakinlik. */
 [data-theme="siyah"] {
+  --macro-protein: #3ee63e;
+  --macro-carbs: #9dfb9d;
+  --macro-fat: #4f8f4f;
+  --macro-rest: color-mix(in srgb, var(--ink) 22%, transparent);
   /* Yeşilli logo YALNIZCA siyah temada; diğerlerinde tek renk. */
   --logo: url("/marka/logo-yesil.webp");
   --shiny-highlight: #3ee63e;
@@ -586,4 +598,28 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .shiny-cta, .shiny-cta::before, .shiny-cta::after, .shiny-cta span::before { animation: none !important; }
+}
+
+/* --- Sayfa açılışı: bloklar sırayla belirir -------------------------- */
+@keyframes fm-reveal {
+  0%   { opacity: 0; transform: translateY(18px) scale(.985); filter: blur(8px); }
+  55%  { opacity: .85; transform: translateY(4px) scale(.997); filter: blur(1.5px); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
+
+.page-reveal > * > * {
+  animation: fm-reveal .62s cubic-bezier(.2, .7, .3, 1) both;
+}
+/* Sıralı gecikme — ilk sekiz blok yeterli, gerisi son gecikmeyle gelir. */
+.page-reveal > * > *:nth-child(1) { animation-delay: .04s; }
+.page-reveal > * > *:nth-child(2) { animation-delay: .12s; }
+.page-reveal > * > *:nth-child(3) { animation-delay: .20s; }
+.page-reveal > * > *:nth-child(4) { animation-delay: .28s; }
+.page-reveal > * > *:nth-child(5) { animation-delay: .36s; }
+.page-reveal > * > *:nth-child(6) { animation-delay: .44s; }
+.page-reveal > * > *:nth-child(7) { animation-delay: .52s; }
+.page-reveal > * > *:nth-child(n+8) { animation-delay: .58s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-reveal > * > * { animation: none !important; }
 }

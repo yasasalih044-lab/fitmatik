@@ -7,6 +7,32 @@ export const THEMES = [
 export type ThemeId = (typeof THEMES)[number]["id"];
 export const DEFAULT_THEME: ThemeId = "pembe";
 export const THEME_KEY = "fitmatik.theme.v1";
+/**
+ * En son hangi sunucu sürümüyle eşitlendiğimizi tutar (hesabın `updated_at`
+ * damgası). İstemci saatiyle karşılaştırma yapmıyoruz — iki damga da sunucudan
+ * geldiği için saat farkı sorun çıkarmıyor.
+ */
+export const THEME_SEEN_KEY = "fitmatik.account.seen";
+
+/** Temayı uygula ve hatırla. `serverStamp` verilirse eşitlenme noktası da işaretlenir. */
+export function rememberTheme(id: ThemeId, serverStamp?: string) {
+  document.documentElement.dataset.theme = id;
+  try {
+    localStorage.setItem(THEME_KEY, id);
+    if (serverStamp) localStorage.setItem(THEME_SEEN_KEY, serverStamp);
+  } catch {
+    /* özel sekmede hatırlanmaz */
+  }
+}
+
+/** Bilinen son sunucu damgası; yoksa boş dize (her damga bundan büyüktür). */
+export function lastSeenStamp(): string {
+  try {
+    return localStorage.getItem(THEME_SEEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
 
 export const isTheme = (v: unknown): v is ThemeId => THEMES.some((t) => t.id === v);
 

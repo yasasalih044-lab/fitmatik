@@ -135,8 +135,11 @@ export async function findByPhone(phone: string): Promise<Account | null> {
 
 export const getAccount = (id: string) => getJsonObject<Account>(accountPath(id));
 
-export async function saveAccount(account: Account): Promise<void> {
-  await putJsonObject(accountPath(account.id), { ...account, updated_at: new Date().toISOString() });
+/** Kaydeder ve YAZILAN hâli döndürür — çağıran taze `updated_at`'i görebilsin. */
+export async function saveAccount(account: Account): Promise<Account> {
+  const saved: Account = { ...account, updated_at: new Date().toISOString() };
+  await putJsonObject(accountPath(saved.id), saved);
+  return saved;
 }
 
 export async function createAccount(input: {

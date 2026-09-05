@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { THEMES, type ThemeId, THEME_KEY } from "@/lib/theme";
+import { rememberTheme, THEMES, type ThemeId } from "@/lib/theme";
+import { useRef } from "react";
 import type { PublicAccount } from "@/lib/accounts";
 
 type Draft = { name: string; age: string; heightCm: string; weightKg: string; gender: string };
@@ -45,6 +46,8 @@ export default function SettingsClient() {
   const [theme, setTheme] = useState<ThemeId | null>(null);
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // Kullanıcı temaya dokunduysa geç düşen yükleme cevabı seçimini ezmesin.
+  const touchedTheme = useRef(false);
 
   useEffect(() => {
     fetch("/api/me", { cache: "no-store" })
@@ -59,19 +62,15 @@ export default function SettingsClient() {
           gender: account.profile.gender,
         });
         setTargets(account.targets);
-        setTheme(account.theme);
+        if (!touchedTheme.current) setTheme(account.theme);
       })
       .catch(() => router.replace("/login"));
   }, [router]);
 
   function applyTheme(id: ThemeId) {
+    touchedTheme.current = true;
     setTheme(id);
-    document.documentElement.dataset.theme = id;
-    try {
-      localStorage.setItem(THEME_KEY, id);
-    } catch {
-      /* özel sekmede hatırlanmaz */
-    }
+    rememberTheme(id);
   }
 
   async function save(retarget = false) {
@@ -105,6 +104,8 @@ export default function SettingsClient() {
     const { account } = (await res.json()) as { account: PublicAccount };
     setAccount(account);
     setTargets(account.targets);
+    // Sunucunun taze damgasını işaretle: bir sonraki eşitleme bunu eskitemez.
+    rememberTheme(account.theme, account.updated_at);
     setStatus({ kind: "ok", text: retarget ? "Hedefler yeniden hesaplandı." : "Kaydedildi." });
   }
 

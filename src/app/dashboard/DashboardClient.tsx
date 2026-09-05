@@ -2,15 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import RangeBar from "@/components/RangeBar";
 import ItemLines from "@/components/ItemLines";
-import DailyProgress from "@/components/DailyProgress";
+import MacroDonut from "@/components/MacroDonut";
 import type { Targets } from "@/lib/accounts";
-import { confidenceLabel, dayKey, dayLabel, kcal, shiftKey, timeLabel, todayKey } from "@/lib/format";
+import { confidenceLabel, dayKey, dayLabel, kcal, timeLabel, todayKey } from "@/lib/format";
 import type { Entry } from "@/lib/types";
 
-const gram = (v: number | null) =>
-  v === null ? "—" : `${(Math.round(v * 10) / 10).toLocaleString("tr-TR")} g`;
 
 type Day = { key: string; entries: Entry[]; best: number; min: number; max: number };
 
@@ -19,6 +16,8 @@ export default function DashboardClient() {
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [targets, setTargets] = useState<Targets | null>(null);
+  const [openDay, setOpenDay] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // Hedefler hesaba bağlı; tarayıcıda değil sunucuda duruyor.
   useEffect(() => {
@@ -26,10 +25,6 @@ export default function DashboardClient() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d?.account && setTargets(d.account.targets))
       .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    void load();
   }, []);
 
   async function load() {
@@ -49,6 +44,11 @@ export default function DashboardClient() {
       setEntries([]);
     }
   }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
 
   async function remove(id: string, eatenAt: string) {
     const before = entries;
@@ -86,114 +86,130 @@ export default function DashboardClient() {
     carbs_g: sumOf(today, "carbs_g"),
     fat_g: sumOf(today, "fat_g"),
   };
-  const chart = useMemo(() => lastDays(days, 14), [days]);
-  const peak = Math.max(1, ...chart.map((d) => d.best));
 
   if (entries === null) {
     return <p className="mono pt-8 text-center text-[13px] text-[var(--faint)]">Yükleniyor…</p>;
   }
 
   const previous = days.filter((d) => d.key !== todayKey());
+  const shownPrevious = previous.slice(0, historyOpen ? previous.length : 5);
+  const target = targets?.kcal ?? 0;
+  const left = Math.max(0, target - (today?.best ?? 0));
+  const over = target > 0 && (today?.best ?? 0) > target;
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Bugünün toplamı — aynı imza çubuğuyla, çünkü bir gün de bir aralıktır */}
-      <section className="space-y-3">
-        <div className="card space-y-4 p-4">
-          <div className="flex items-baseline justify-between">
-            <p className="eyebrow">Bugün</p>
-            <p className="mono text-[11px] text-[var(--faint)]">
-              {today ? `${today.entries.length} kayıt` : "kayıt yok"}
-            </p>
-          </div>
-          <p className="figure text-[62px]">
-            {kcal(today?.best ?? 0)}
-            <span className="mono ml-2 align-top text-[12px] font-normal text-[var(--muted)]">kcal</span>
+    <div className="space-y-5 pb-12">
+      {error && (
+        <p className="rounded-md border border-[var(--red)]/40 px-3 py-2 text-[13px] text-[var(--red-ink)]">{error}</p>
+      )}
+
+      {/* Bugün — tek blok. Aynı sayı daha önce dört ayrı yerde tekrar ediyordu. */}
+      <section className="card space-y-3 p-4">
+        <div className="flex items-baseline justify-between">
+          <p className="eyebrow">Bugün</p>
+          <p className="mono text-[11px] text-[var(--faint)]">
+            {today ? `${today.entries.length} kayıt` : "kayıt yok"}
           </p>
-          <RangeBar
-            min={today?.min ?? 0}
-            max={today?.max ?? 0}
-            best={today?.best ?? 0}
-            scaleMax={Math.max(peak, today?.max ?? 0)}
-          />
         </div>
 
-        {targets && <DailyProgress totals={todayTotals} targets={targets} />}
+        <p className="figure text-[58px]">
+          {kcal(today?.best ?? 0)}
+          <span className="mono ml-2 align-top text-[12px] font-normal text-[var(--muted)]">kcal</span>
+        </p>
 
-        {today ? (
-          <DayList day={today} onDelete={remove} open={open} setOpen={setOpen} />
-        ) : (
-          <div className="card space-y-3 px-4 py-8 text-center">
-            <p className="text-[13px] leading-snug text-[var(--muted)]">
-              Bugün henüz kayıt yok. Ne yediğini yaz ya da bir paketin fotoğrafını çek.
+        {target > 0 && (
+          <>
+            <div className="h-[6px] overflow-hidden rounded-full bg-[var(--sunk)]">
+              <div
+                className="h-full rounded-full transition-[width] duration-500"
+                style={{
+                  width: `${Math.min(100, ((today?.best ?? 0) / target) * 100)}%`,
+                  background: over ? "var(--red)" : "var(--ink)",
+                }}
+              />
+            </div>
+            <p className="mono text-[11px] text-[var(--muted)]">
+              {over
+                ? `${kcal((today?.best ?? 0) - target)} kcal aşıldı · hedef ${kcal(target)}`
+                : `${kcal(left)} kcal kaldı · hedef ${kcal(target)}`}
             </p>
-            <Link href="/upload" className="btn btn-primary inline-flex px-5 py-2.5 text-sm">
-              Kayıt ekle
-            </Link>
-          </div>
+          </>
         )}
       </section>
 
-      {error && <p className="text-[13px] text-[var(--red)]">{error}</p>}
+      {/* Kalorinin hangi makrodan geldiği */}
+      {(today?.entries.length ?? 0) > 0 && <MacroDonut totals={todayTotals} />}
 
-      <section className="space-y-2.5">
-        <p className="eyebrow">Son 14 gün</p>
-        <div className="flex h-28 gap-[3px]">
-          {chart.map((d) => (
-            <div key={d.key} className="flex h-full flex-1 flex-col items-center gap-1.5">
-              <div className="flex w-full flex-1 items-end">
-                <div
-                  className={`w-full rounded-t-[3px] ${
-                    d.key === todayKey() ? "bg-[var(--red)]" : d.best ? "bg-[var(--ink)]/25" : "bg-[var(--sunk)]"
-                  }`}
-                  style={{ height: `${Math.max(2, (d.best / peak) * 100)}%` }}
-                  title={`${dayLabel(d.key)} · ${kcal(d.best)} kcal`}
-                />
-              </div>
-              <span className="mono text-[9px] text-[var(--faint)]">{d.key.slice(8)}</span>
-            </div>
-          ))}
+      {today ? (
+        <DayList day={today} onDelete={remove} open={open} setOpen={setOpen} />
+      ) : (
+        <div className="card space-y-3 px-4 py-8 text-center">
+          <p className="text-[13px] leading-snug text-[var(--muted)]">
+            Bugün henüz kayıt yok. Ne yediğini yaz ya da bir paketin fotoğrafını çek.
+          </p>
+          <Link href="/upload" className="btn btn-primary inline-flex px-5 py-2.5 text-sm">
+            Kayıt ekle
+          </Link>
         </div>
-      </section>
+      )}
 
-      {previous.map((d) => (
-        <section key={d.key} className="space-y-2">
-          <div className="flex items-baseline justify-between px-1">
-            <p className="eyebrow">{dayLabel(d.key)}</p>
-            <p className="mono text-[12px] text-[var(--muted)]">{kcal(d.best)} kcal</p>
+      {/* Geçmiş — katlanmış. Açılınca o günün kayıtları geliyor. */}
+      {previous.length > 0 && (
+        <section className="space-y-2">
+          <p className="eyebrow px-1">Geçmiş</p>
+          <div className="card divide-y divide-[var(--rule)]">
+            {shownPrevious.map((d) => {
+              const isOpen = openDay === d.key;
+              return (
+                <div key={d.key}>
+                  <button
+                    onClick={() => setOpenDay(isOpen ? null : d.key)}
+                    aria-expanded={isOpen}
+                    className="flex w-full items-baseline justify-between px-4 py-3 text-left"
+                  >
+                    <span className="text-[14px]">{dayLabel(d.key)}</span>
+                    <span className="mono text-[13px] text-[var(--muted)]">{kcal(d.best)} kcal</span>
+                  </button>
+                  {isOpen && (
+                    <div className="border-t border-[var(--rule)]">
+                      <DayList day={d} onDelete={remove} open={open} setOpen={setOpen} bare />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <DayList day={d} onDelete={remove} open={open} setOpen={setOpen} />
+          {previous.length > 5 && (
+            <button onClick={() => setHistoryOpen((v) => !v)} className="btn btn-quiet w-full text-[12px]">
+              {historyOpen ? "Daha az göster" : `${previous.length - 5} gün daha`}
+            </button>
+          )}
         </section>
-      ))}
-
-      {days.length === 0 && (
-        <p className="pt-2 text-center text-[12px] text-[var(--faint)]">Geçmiş kayıt yok.</p>
       )}
     </div>
   );
 }
 
-/** Bir günün kayıtları. Çubuklar günün en yüksek üst sınırına göre ölçeklenir,
- *  böylece satırlar birbiriyle karşılaştırılabilir olur. */
+/** Bir günün kayıtları. Çubuklar günün en yüksek üst sınırına göre ölçeklenir. */
 function DayList({
   day,
   onDelete,
   open,
   setOpen,
+  bare = false,
 }: {
   day: Day;
   onDelete: (id: string, eatenAt: string) => void;
   open: string | null;
   setOpen: (v: string | null) => void;
+  bare?: boolean;
 }) {
-  const scale = Math.max(1, ...day.entries.map((e) => e.kcal_max));
   return (
-    <div className="card divide-y divide-[var(--rule)]">
+    <div className={`divide-y divide-[var(--rule)] ${bare ? "" : "card"}`}>
       {day.entries.map((e) => (
         <EntryRow
           key={e.id}
           entry={e}
-          scaleMax={scale}
           open={open === e.id}
           onToggle={() => setOpen(open === e.id ? null : e.id)}
           onDelete={() => onDelete(e.id, e.eaten_at)}
@@ -203,16 +219,13 @@ function DayList({
   );
 }
 
-function EntryRow({ entry, scaleMax, open, onToggle, onDelete }: { entry: Entry; scaleMax: number; open: boolean; onToggle: () => void; onDelete: () => void }) {
+function EntryRow({ entry, open, onToggle, onDelete }: { entry: Entry; open: boolean; onToggle: () => void; onDelete: () => void }) {
   return (
     <div>
       <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         <span className="mono w-[42px] shrink-0 text-[12px] text-[var(--faint)]">{timeLabel(entry.eaten_at)}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px]">{entry.title}</span>
-          <span className="mt-1 block max-w-[180px]">
-            <RangeBar min={entry.kcal_min} max={entry.kcal_max} best={entry.kcal_best} scaleMax={scaleMax} compact />
-          </span>
         </span>
         <span className="mono shrink-0 text-[15px] text-[var(--ink)]">{kcal(entry.kcal_best)}</span>
       </button>
@@ -230,15 +243,6 @@ function EntryRow({ entry, scaleMax, open, onToggle, onDelete }: { entry: Entry;
           <div className="-mx-4 border-y border-[var(--rule)] bg-[var(--card)]">
             <ItemLines items={entry.items} />
           </div>
-
-          {(entry.protein_g !== null || entry.carbs_g !== null || entry.fat_g !== null) && (
-            <div className="mono flex gap-4 text-[11px] text-[var(--muted)]">
-              <span><span className="text-[var(--faint)]">Toplam</span></span>
-              <span><span className="text-[var(--faint)]">P</span> {gram(entry.protein_g)}</span>
-              <span><span className="text-[var(--faint)]">K</span> {gram(entry.carbs_g)}</span>
-              <span><span className="text-[var(--faint)]">Y</span> {gram(entry.fat_g)}</span>
-            </div>
-          )}
 
           <div className="flex items-center justify-between pt-1">
             <span className="eyebrow">
@@ -271,14 +275,3 @@ function sumOf(day: Day | undefined, key: "protein_g" | "carbs_g" | "fat_g"): nu
   return day.entries.reduce((a, e) => a + (typeof e[key] === "number" ? (e[key] as number) : 0), 0);
 }
 
-/** Kayıt olmayan günler de çubukta yer alsın; boşluk da bilgidir. */
-function lastDays(days: Day[], n: number) {
-  const byKey = new Map(days.map((d) => [d.key, d]));
-  const today = todayKey();
-  const out: { key: string; best: number }[] = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const key = shiftKey(today, -i);
-    out.push({ key, best: byKey.get(key)?.best ?? 0 });
-  }
-  return out;
-}

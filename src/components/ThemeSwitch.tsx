@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DEFAULT_THEME, isTheme, THEMES, THEME_KEY, type ThemeId } from "@/lib/theme";
+import { DEFAULT_THEME, isTheme, THEMES, type ThemeId, rememberTheme } from "@/lib/theme";
 
 const labels: Record<ThemeId, string> = {
   pembe: "Pembe",
@@ -30,16 +30,11 @@ export default function ThemeSwitch() {
 
   function pick(id: ThemeId) {
     // eslint-disable-next-line react-hooks/immutability -- Tema, React ağacının dışındaki belge tercihidir.
-    document.documentElement.dataset.theme = id;
+    rememberTheme(id);
     setTheme(id);
     const color = getComputedStyle(document.documentElement).getPropertyValue("--browser-theme").trim();
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", color);
     window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: id }));
-    try {
-      localStorage.setItem(THEME_KEY, id);
-    } catch {
-      /* özel sekmede hatırlanmaz, sorun değil */
-    }
   }
 
   return (

@@ -37,8 +37,10 @@ export async function PUT(req: Request) {
   if (body.targets !== undefined) next.targets = parseTargets(body.targets);
 
   try {
-    await saveAccount(next);
-    return NextResponse.json({ ok: true, account: publicAccount(next) });
+    // Yazılan hâli döndür: içindeki taze updated_at istemcinin "hangi kopya
+    // daha yeni" sorusunu saat farkı olmadan cevaplamasını sağlıyor.
+    const saved = await saveAccount(next);
+    return NextResponse.json({ ok: true, account: publicAccount(saved) });
   } catch (e) {
     console.error("[fitmatik] me:", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "Kaydedilemedi. Tekrar dene." }, { status: 500 });
