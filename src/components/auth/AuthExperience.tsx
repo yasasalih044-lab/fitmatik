@@ -5,7 +5,7 @@ import type React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Smartphone, UserRound } from "lucide-react";
-import Velaris from "@/components/ui/velaris";
+import TopoField from "@/components/ui/topo-field";
 import { ShiningText } from "@/components/ui/shining-text";
 
 type AuthMode = "giris" | "kayit";
@@ -180,7 +180,7 @@ export default function AuthExperience() {
 
   return (
     <main className="auth-page">
-      <Velaris />
+      <TopoField className="topo-field" />
       <div className="auth-page__content">
         <header className="auth-page__header">
           <Link href="/" className="auth-logo" aria-label="Fit-matik ana sayfa" />

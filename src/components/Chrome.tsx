@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import PageReveal from "./PageReveal";
-import Velaris from "./ui/velaris";
+import TopoField from "./ui/topo-field";
 import { lastSeenStamp, normalizeTheme, rememberTheme } from "@/lib/theme";
 import { useEffect, useState } from "react";
 
@@ -51,7 +51,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Velaris />
+      <TopoField className="topo-field" />
       <div className="app-shell">
         <header className="app-header safe-top">
           {/* Logo dosyası temayla değişiyor: yeşilli sürüm yalnızca siyah temada. */}

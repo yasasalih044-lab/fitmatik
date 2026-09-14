@@ -210,6 +210,14 @@ body {
   opacity: .62;
 }
 
+.topo-field {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 @layer base {
   button, input, textarea, select { font: inherit; color: inherit; }
 
@@ -576,4 +584,5 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
   .velaris canvas { display: none !important; }
+  .topo-field { display: none !important; }
 }
