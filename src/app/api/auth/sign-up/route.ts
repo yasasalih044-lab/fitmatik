@@ -4,6 +4,7 @@ import {
   normalizePhone, parseProfile, passwordError, publicAccount, SESSION_COOKIE,
   SessionConfigurationError, SignupRateLimitError, signupRateKey,
 } from "@/lib/accounts";
+import { isGoal, isTrainingMode } from "@/lib/goals";
 import { supabaseConfigured } from "@/lib/store";
 import { requestIp } from "@/lib/request-ip";
 
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Depolama yapılandırılmamış." }, { status: 503 });
   }
 
-  let body: { phone?: string; password?: string; profile?: unknown };
+  let body: { phone?: string; password?: string; profile?: unknown; goal?: unknown; trainingMode?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -32,6 +33,9 @@ export async function POST(req: Request) {
   const parsed = parseProfile(body.profile);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
+  if (body.goal !== undefined && !isGoal(body.goal)) return NextResponse.json({ error: "Hedef geçersiz." }, { status: 400 });
+  if (!isTrainingMode(body.trainingMode)) return NextResponse.json({ error: "Gelişmiş mod geçersiz." }, { status: 400 });
+
   try {
     // Fail before creating a row: a production account must never be left
     // behind without a cryptographically configured session issuer.
@@ -41,6 +45,8 @@ export async function POST(req: Request) {
       phone,
       password,
       profile: parsed.profile,
+      goal: isGoal(body.goal) ? body.goal : undefined,
+      trainingMode: body.trainingMode ?? null,
       signupIpHash: signupRateKey(`ip:${requestIp(req)}`),
     });
 

@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { DEFAULT_THEME, isTheme, type ThemeId } from "./theme";
 import { supabase } from "./store";
+import { suggestTargetsForGoal, type Goal, type TrainingMode } from "./goals";
 
 /** Values stored by `app_accounts`; all personal data stays server-side. */
 export type Gender = "kadin" | "erkek" | "belirtmek-istemiyorum";
@@ -293,10 +294,14 @@ export async function createAccount(input: {
   password: string;
   profile: Profile;
   theme?: ThemeId;
+  goal?: Goal;
+  trainingMode?: TrainingMode;
   signupIpHash: string;
 }): Promise<Account> {
   const password = hashPassword(input.password);
-  const targets = suggestTargets(input.profile);
+  const targets = input.goal
+    ? suggestTargetsForGoal(input.profile, input.goal, input.trainingMode ?? null)
+    : suggestTargets(input.profile);
   const { data, error } = await supabase()
     .rpc("create_app_account", {
       p_phone: input.phone,

@@ -4,6 +4,40 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { forgetTheme, previewTheme, rememberTheme, THEMES, type ThemeId } from "@/lib/theme";
 import type { PublicAccount } from "@/lib/accounts";
+import { GOALS, type Goal, type TrainingMode } from "@/lib/goals";
+import { GoalRuler } from "@/components/ui/goal-ruler";
+import { IntelligenceBar } from "@/components/ui/intelligence-bar";
+
+const GOAL_KEY = "fitmatik.goal.v1";
+const GOAL_MODE_KEY = "fitmatik.goal-mode.v1";
+const RESEARCH_KEY = "fitmatik.research-depth.v1";
+
+function readGoal(): Goal {
+  try {
+    const raw = localStorage.getItem(GOAL_KEY);
+    return GOALS.some((g) => g.id === raw) ? (raw as Goal) : "koru_kas";
+  } catch {
+    return "koru_kas";
+  }
+}
+
+function readMode(): TrainingMode {
+  try {
+    const raw = localStorage.getItem(GOAL_MODE_KEY);
+    return raw === "bulk" || raw === "definasyon" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function readResearchLevel(): 0 | 1 | 2 {
+  try {
+    const raw = Number(localStorage.getItem(RESEARCH_KEY));
+    return raw === 0 || raw === 1 || raw === 2 ? raw : 1;
+  } catch {
+    return 1;
+  }
+}
 
 type Draft = { name: string; age: string; heightCm: string; weightKg: string; gender: string };
 type Targets = { kcal: number; protein_g: number; carbs_g: number; fat_g: number };
@@ -80,6 +114,12 @@ export default function SettingsClient() {
   const [walletError, setWalletError] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  // draft/targets/theme henüz gelmediyse alt bileşenler zaten "Yükleniyor…" ile
+  // gizleniyor, o yüzden localStorage'ı doğrudan ilk render'da okumak SSR/hydrate
+  // uyumsuzluğu yaratmıyor.
+  const [goal, setGoal] = useState<Goal>(() => (typeof window === "undefined" ? "koru_kas" : readGoal()));
+  const [trainingMode, setTrainingMode] = useState<TrainingMode>(() => (typeof window === "undefined" ? null : readMode()));
+  const [researchLevel, setResearchLevel] = useState<0 | 1 | 2>(() => (typeof window === "undefined" ? 1 : readResearchLevel()));
   // Kullanıcı temaya dokunduysa geç düşen yükleme cevabı seçimini ezmesin.
   const touchedTheme = useRef(false);
   // Bir seçim yalnızca Kaydet başarılı olduğunda hesap ayarı olur. Sayfadan
@@ -134,6 +174,34 @@ export default function SettingsClient() {
     return () => ctrl.abort();
   }, []);
 
+  function updateGoal(next: Goal) {
+    setGoal(next);
+    try {
+      localStorage.setItem(GOAL_KEY, next);
+    } catch {
+      /* özel sekmede hatırlanmaz */
+    }
+  }
+
+  function updateMode(next: TrainingMode) {
+    setTrainingMode(next);
+    try {
+      if (next) localStorage.setItem(GOAL_MODE_KEY, next);
+      else localStorage.removeItem(GOAL_MODE_KEY);
+    } catch {
+      /* özel sekmede hatırlanmaz */
+    }
+  }
+
+  function updateResearchLevel(next: 0 | 1 | 2) {
+    setResearchLevel(next);
+    try {
+      localStorage.setItem(RESEARCH_KEY, String(next));
+    } catch {
+      /* özel sekmede hatırlanmaz */
+    }
+  }
+
   function applyTheme(id: ThemeId) {
     touchedTheme.current = true;
     setTheme(id);
@@ -159,6 +227,8 @@ export default function SettingsClient() {
         theme,
         targets: retarget ? undefined : targets,
         retarget,
+        goal,
+        trainingMode,
       }),
     }).catch(() => null);
 
@@ -302,12 +372,32 @@ export default function SettingsClient() {
         </div>
       </section>
 
+      {/* --- Hedef --- */}
+      <section className="card space-y-3 p-4">
+        <div className="space-y-1">
+          <p className="eyebrow">Hedefiniz nedir?</p>
+          <p className="text-[13px] leading-snug text-[var(--muted)]">Hesap kurarken de sorduk; burada değiştirebilirsin.</p>
+        </div>
+        <GoalRuler value={goal} onChange={updateGoal} mode={trainingMode} onModeChange={updateMode} />
+      </section>
+
+      {/* --- Zeka --- */}
+      <section className="card space-y-3 p-4">
+        <div className="space-y-1">
+          <p className="eyebrow">Zeka</p>
+          <p className="text-[13px] leading-snug text-[var(--muted)]">
+            Ne kadar sıkı araştırma yapılacağını belirler. Şimdilik yalnızca görünüm — analize henüz bağlı değil.
+          </p>
+        </div>
+        <IntelligenceBar level={researchLevel} onChange={updateResearchLevel} />
+      </section>
+
       {/* --- Hedefler --- */}
       <section className="card space-y-4 p-4">
         <div className="flex items-baseline justify-between">
           <p className="eyebrow">Günlük hedef</p>
           <button onClick={() => save(true)} disabled={saving} className="btn btn-quiet text-[11px]">
-            Boy/kiloya göre hesapla
+            Hedefe göre hesapla
           </button>
         </div>
         <div className="grid grid-cols-2 gap-3">

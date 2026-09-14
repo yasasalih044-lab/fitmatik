@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { DEFAULT_THEME, THEME_BOOT_SCRIPT } from "@/lib/theme";
+import IntroSplash from "@/components/IntroSplash";
 
 const instrument = Instrument_Sans({
   variable: "--font-instrument",
@@ -36,7 +37,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
-      <body className={`${instrument.variable} ${jetbrains.variable}`}>{children}</body>
+      <body className={`${instrument.variable} ${jetbrains.variable}`}>
+        <IntroSplash />
+        {children}
+      </body>
     </html>
   );
 }

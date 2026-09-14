@@ -7,9 +7,11 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, Eye, EyeOff, LockKeyhole, Smartphone, UserRound } from "lucide-react";
 import TopoField from "@/components/ui/topo-field";
 import { ShiningText } from "@/components/ui/shining-text";
+import { GoalRuler } from "@/components/ui/goal-ruler";
+import type { Goal, TrainingMode } from "@/lib/goals";
 
 type AuthMode = "giris" | "kayit";
-type SignupStep = "credentials" | "profile";
+type SignupStep = "credentials" | "profile" | "goal";
 type Gender = "kadin" | "erkek" | "belirtmek-istemiyorum" | "";
 
 type Credentials = { phone: string; password: string };
@@ -85,6 +87,8 @@ export default function AuthExperience() {
   const [step, setStep] = useState<SignupStep>("credentials");
   const [credentials, setCredentials] = useState<Credentials>(EMPTY_CREDENTIALS);
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
+  const [goal, setGoal] = useState<Goal>("koru_kas");
+  const [trainingMode, setTrainingMode] = useState<TrainingMode>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -102,6 +106,11 @@ export default function AuthExperience() {
     setStep("credentials");
   }
 
+  function goToProfile() {
+    setError("");
+    setStep("profile");
+  }
+
   function continueToProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -114,6 +123,15 @@ export default function AuthExperience() {
       return;
     }
     setStep("profile");
+  }
+
+  function continueToGoal() {
+    setError("");
+    if (!hasCompleteProfile(profile)) {
+      setError("Devam etmek için tüm bilgileri geçerli biçimde doldur.");
+      return;
+    }
+    setStep("goal");
   }
 
   async function signIn(event: React.FormEvent<HTMLFormElement>) {
@@ -159,6 +177,8 @@ export default function AuthExperience() {
           phone: normalizePhone(credentials.phone),
           password: credentials.password,
           profile: toProfilePayload(profile),
+          goal,
+          trainingMode,
         }),
       });
       const body = await responseBody(response);
@@ -223,14 +243,20 @@ export default function AuthExperience() {
               step={step}
               credentials={credentials}
               profile={profile}
+              goal={goal}
+              trainingMode={trainingMode}
               showPassword={showPassword}
               busy={busy}
               error={error}
               onCredentialsChange={updateCredentials}
               onProfileChange={updateProfile}
+              onGoalChange={setGoal}
+              onModeChange={setTrainingMode}
               onShowPassword={() => setShowPassword((visible) => !visible)}
-              onBack={goToCredentials}
+              onBackToCredentials={goToCredentials}
+              onBackToProfile={goToProfile}
               onCredentialsNext={continueToProfile}
+              onProfileNext={continueToGoal}
               onSubmit={submitProfile}
             />
           )}
@@ -285,27 +311,39 @@ function SignUp({
   step,
   credentials,
   profile,
+  goal,
+  trainingMode,
   showPassword,
   busy,
   error,
   onCredentialsChange,
   onProfileChange,
+  onGoalChange,
+  onModeChange,
   onShowPassword,
-  onBack,
+  onBackToCredentials,
+  onBackToProfile,
   onCredentialsNext,
+  onProfileNext,
   onSubmit,
 }: {
   step: SignupStep;
   credentials: Credentials;
   profile: Profile;
+  goal: Goal;
+  trainingMode: TrainingMode;
   showPassword: boolean;
   busy: boolean;
   error: string;
   onCredentialsChange: (key: keyof Credentials, value: string) => void;
   onProfileChange: (key: keyof Profile, value: string) => void;
+  onGoalChange: (goal: Goal) => void;
+  onModeChange: (mode: TrainingMode) => void;
   onShowPassword: () => void;
-  onBack: () => void;
+  onBackToCredentials: () => void;
+  onBackToProfile: () => void;
   onCredentialsNext: (event: React.FormEvent<HTMLFormElement>) => void;
+  onProfileNext: () => void;
   onSubmit: () => void;
 }) {
   if (step === "credentials") {
@@ -331,17 +369,43 @@ function SignUp({
     );
   }
 
+  if (step === "profile") {
+    return (
+      <div className="auth-flow">
+        <Progress current={2} />
+        <div className="auth-intro">
+          <button type="button" className="auth-back" onClick={onBackToCredentials}>
+            <ArrowLeft size={16} aria-hidden /> Geri
+          </button>
+          <h1 id="auth-title">Seni tanıyalım.</h1>
+          <p>Bu bilgiler yalnızca sana uygun günlük hedefleri hesaplamak için kullanılır.</p>
+        </div>
+        <ProfileForm profile={profile} onChange={onProfileChange} onSubmit={onProfileNext} error={error} label="Devam et" busy={false} />
+      </div>
+    );
+  }
+
   return (
     <div className="auth-flow">
-      <Progress current={2} />
+      <Progress current={3} />
       <div className="auth-intro">
-        <button type="button" className="auth-back" onClick={onBack}>
+        <button type="button" className="auth-back" onClick={onBackToProfile}>
           <ArrowLeft size={16} aria-hidden /> Geri
         </button>
-        <h1 id="auth-title">Seni tanıyalım.</h1>
-        <p>Bu bilgiler yalnızca sana uygun günlük hedefleri hesaplamak için kullanılır.</p>
+        <h1 id="auth-title">Hedefin ne?</h1>
+        <p>Seçimine göre kalori ve makro hedeflerini ayarlarız; sonra ayarlardan değiştirebilirsin.</p>
       </div>
-      <ProfileForm profile={profile} onChange={onProfileChange} onSubmit={onSubmit} error={error} label="Hesabımı oluştur" busy={busy} />
+      <div className="auth-form">
+        <GoalRuler value={goal} onChange={onGoalChange} mode={trainingMode} onModeChange={onModeChange} />
+        <ErrorMessage error={error} />
+        {busy ? (
+          <LoadingLabel />
+        ) : (
+          <button type="button" className="btn btn-primary auth-submit" onClick={onSubmit}>
+            Hesabımı oluştur
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -476,10 +540,10 @@ function SubmitButton({ label, disabled = false }: { label: string; disabled?: b
   );
 }
 
-function Progress({ current }: { current: 1 | 2 }) {
+function Progress({ current }: { current: 1 | 2 | 3 }) {
   return (
     <div className="auth-progress" aria-label={`Hesap kurulumunun ${current}. adımı`}>
-      {[1, 2].map((step) => (
+      {[1, 2, 3].map((step) => (
         <span key={step} data-active={step <= current}>
           {step < current ? <Check size={12} strokeWidth={2.5} aria-hidden /> : step}
         </span>

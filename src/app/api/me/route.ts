@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseProfile, parseTargets, publicAccount, saveAccount, suggestTargets } from "@/lib/accounts";
+import { isGoal, isTrainingMode, suggestTargetsForGoal } from "@/lib/goals";
 import { currentAccount } from "@/lib/session";
 import { isTheme } from "@/lib/theme";
 
@@ -17,12 +18,18 @@ export async function PUT(req: Request) {
   const account = await currentAccount();
   if (!account) return NextResponse.json({ error: "Oturum yok." }, { status: 401 });
 
-  let body: { profile?: unknown; theme?: string; targets?: unknown; retarget?: boolean };
+  let body: {
+    profile?: unknown; theme?: string; targets?: unknown; retarget?: boolean;
+    goal?: unknown; trainingMode?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Geçersiz istek." }, { status: 400 });
   }
+
+  if (body.goal !== undefined && !isGoal(body.goal)) return NextResponse.json({ error: "Hedef geçersiz." }, { status: 400 });
+  if (!isTrainingMode(body.trainingMode)) return NextResponse.json({ error: "Gelişmiş mod geçersiz." }, { status: 400 });
 
   const next = { ...account };
 
@@ -31,7 +38,11 @@ export async function PUT(req: Request) {
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     next.profile = parsed.profile;
     // Kilo/boy/yaş değişince hedefleri kullanıcı istemedikçe ezmiyoruz.
-    if (body.retarget) next.targets = suggestTargets(parsed.profile);
+    if (body.retarget) {
+      next.targets = isGoal(body.goal)
+        ? suggestTargetsForGoal(parsed.profile, body.goal, body.trainingMode ?? null)
+        : suggestTargets(parsed.profile);
+    }
   }
   if (body.theme !== undefined) {
     if (!isTheme(body.theme)) return NextResponse.json({ error: "Tema geçersiz." }, { status: 400 });
