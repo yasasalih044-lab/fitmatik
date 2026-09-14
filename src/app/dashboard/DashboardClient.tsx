@@ -18,6 +18,9 @@ export default function DashboardClient() {
   const [targets, setTargets] = useState<Targets | null>(null);
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState("");
 
   // Hedefler hesaba bağlı; tarayıcıda değil sunucuda duruyor.
   useEffect(() => {
@@ -62,6 +65,58 @@ export default function DashboardClient() {
     if (!res?.ok) {
       setEntries(before); // silme başarısız — satırı geri koy
       setError("Kayıt silinemedi.");
+    }
+  }
+
+  function startEdit(entry: Entry) {
+    setEditError("");
+    setEditing({ id: entry.id, text: entry.raw_input || entry.title });
+    setOpen(entry.id);
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setEditError("");
+  }
+
+  /** Yanlış hesaplanan kaydı düzeltilmiş metinle yeniden analiz eder. Önce
+   * yeni kayıt başarıyla oluşur, ancak ondan sonra eskisi silinir — sırası
+   * tersine çevrilirse bir hata anında veri kaybolur. */
+  async function recalculate(entry: Entry) {
+    if (!editing || editing.id !== entry.id) return;
+    const text = editing.text.trim();
+    if (text.length < 2) {
+      setEditError("Önce ne yediğini yaz.");
+      return;
+    }
+    setEditBusy(true);
+    setEditError("");
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ source: "text", text, eaten_at: entry.eaten_at }),
+        signal: AbortSignal.timeout(280_000),
+      });
+      const raw = await res.text();
+      let data: { entry?: Entry | null; error?: string } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error("Sunucudan beklenmeyen yanıt geldi (" + res.status + ").");
+      }
+      if (!res.ok) throw new Error(data.error || "İstek başarısız (" + res.status + ").");
+      if (!data.entry) throw new Error("Yeniden hesaplanan kayıt kaydedilemedi.");
+
+      await fetch(`/api/entries?id=${entry.id}&day=${entry.eaten_at.slice(0, 10)}`, { method: "DELETE" }).catch(() => null);
+
+      setEditing(null);
+      setOpen(null);
+      void load();
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "Yeniden hesaplanamadı.");
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -146,7 +201,19 @@ export default function DashboardClient() {
       {(today?.entries.length ?? 0) > 0 && <MacroDonut totals={todayTotals} />}
 
       {today ? (
-        <DayList day={today} onDelete={remove} open={open} setOpen={setOpen} />
+        <DayList
+          day={today}
+          onDelete={remove}
+          open={open}
+          setOpen={setOpen}
+          editing={editing}
+          editBusy={editBusy}
+          editError={editError}
+          onEditStart={startEdit}
+          onEditChange={(text) => setEditing((prev) => (prev ? { ...prev, text } : prev))}
+          onEditCancel={cancelEdit}
+          onEditSubmit={recalculate}
+        />
       ) : (
         <div className="card space-y-3 px-4 py-8 text-center">
           <p className="text-[13px] leading-snug text-[var(--muted)]">
@@ -177,7 +244,20 @@ export default function DashboardClient() {
                   </button>
                   {isOpen && (
                     <div className="border-t border-[var(--rule)]">
-                      <DayList day={d} onDelete={remove} open={open} setOpen={setOpen} bare />
+                      <DayList
+                        day={d}
+                        onDelete={remove}
+                        open={open}
+                        setOpen={setOpen}
+                        editing={editing}
+                        editBusy={editBusy}
+                        editError={editError}
+                        onEditStart={startEdit}
+                        onEditChange={(text) => setEditing((prev) => (prev ? { ...prev, text } : prev))}
+                        onEditCancel={cancelEdit}
+                        onEditSubmit={recalculate}
+                        bare
+                      />
                     </div>
                   )}
                 </div>
@@ -196,17 +276,33 @@ export default function DashboardClient() {
 }
 
 /** Bir günün kayıtları. Çubuklar günün en yüksek üst sınırına göre ölçeklenir. */
+type EditState = { id: string; text: string } | null;
+
 function DayList({
   day,
   onDelete,
   open,
   setOpen,
+  editing,
+  editBusy,
+  editError,
+  onEditStart,
+  onEditChange,
+  onEditCancel,
+  onEditSubmit,
   bare = false,
 }: {
   day: Day;
   onDelete: (id: string, eatenAt: string) => void;
   open: string | null;
   setOpen: (v: string | null) => void;
+  editing: EditState;
+  editBusy: boolean;
+  editError: string;
+  onEditStart: (entry: Entry) => void;
+  onEditChange: (text: string) => void;
+  onEditCancel: () => void;
+  onEditSubmit: (entry: Entry) => void;
   bare?: boolean;
 }) {
   return (
@@ -218,13 +314,47 @@ function DayList({
           open={open === e.id}
           onToggle={() => setOpen(open === e.id ? null : e.id)}
           onDelete={() => onDelete(e.id, e.eaten_at)}
+          isEditing={editing?.id === e.id}
+          editText={editing?.id === e.id ? editing.text : ""}
+          editBusy={editBusy}
+          editError={editing?.id === e.id ? editError : ""}
+          onEditStart={() => onEditStart(e)}
+          onEditChange={onEditChange}
+          onEditCancel={onEditCancel}
+          onEditSubmit={() => onEditSubmit(e)}
         />
       ))}
     </div>
   );
 }
 
-function EntryRow({ entry, open, onToggle, onDelete }: { entry: Entry; open: boolean; onToggle: () => void; onDelete: () => void }) {
+function EntryRow({
+  entry,
+  open,
+  onToggle,
+  onDelete,
+  isEditing,
+  editText,
+  editBusy,
+  editError,
+  onEditStart,
+  onEditChange,
+  onEditCancel,
+  onEditSubmit,
+}: {
+  entry: Entry;
+  open: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+  isEditing: boolean;
+  editText: string;
+  editBusy: boolean;
+  editError: string;
+  onEditStart: () => void;
+  onEditChange: (text: string) => void;
+  onEditCancel: () => void;
+  onEditSubmit: () => void;
+}) {
   return (
     <div>
       <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3 text-left">
@@ -235,7 +365,30 @@ function EntryRow({ entry, open, onToggle, onDelete }: { entry: Entry; open: boo
         <span className="mono shrink-0 text-[15px] text-[var(--ink)]">{kcal(entry.kcal_best)}</span>
       </button>
 
-      {open && (
+      {open && isEditing && (
+        <div className="rise space-y-3 border-t border-[var(--rule)] bg-[var(--sunk)] px-4 py-3">
+          <p className="eyebrow">Düzelt ve yeniden hesapla</p>
+          <textarea
+            value={editText}
+            onChange={(e) => onEditChange(e.target.value)}
+            rows={4}
+            disabled={editBusy}
+            placeholder="Ne yediğini doğru şekilde yaz"
+            className="text-[14px]"
+          />
+          {editError && <p className="text-[12px] text-[var(--red-ink)]">{editError}</p>}
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onEditCancel} disabled={editBusy} className="btn btn-quiet text-[12px]">
+              Vazgeç
+            </button>
+            <button onClick={onEditSubmit} disabled={editBusy} className="btn btn-primary px-3 py-2 text-[12px]">
+              {editBusy ? "Hesaplanıyor…" : "Yeniden hesapla"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {open && !isEditing && (
         <div className="rise space-y-3 border-t border-[var(--rule)] bg-[var(--sunk)] px-4 py-3">
           <p className="text-[13px] leading-snug">{entry.verdict}</p>
 
@@ -254,9 +407,14 @@ function EntryRow({ entry, open, onToggle, onDelete }: { entry: Entry; open: boo
               {confidenceLabel(entry.confidence)}
               {entry.sources?.length ? ` · ${entry.sources.length} kaynak` : ""}
             </span>
-            <button onClick={onDelete} className="btn btn-quiet text-[12px] text-[var(--red)]">
-              Sil
-            </button>
+            <span className="flex gap-1">
+              <button onClick={onEditStart} className="btn btn-quiet text-[12px]">
+                Düzenle
+              </button>
+              <button onClick={onDelete} className="btn btn-quiet text-[12px] text-[var(--red)]">
+                Sil
+              </button>
+            </span>
           </div>
 
           {entry.sources?.length > 0 && (
