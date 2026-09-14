@@ -1,24 +1,21 @@
 # Kimlik doğrulama — ön yüz sözleşmesi
 
-Bu dosya, Fit-matik'in telefon/şifre ve Google ile giriş arayüzünün Claude
-tarafındaki backend ile bağlantısını tanımlar. Ön yüz şifreyi veya kişisel
-profil bilgisini `localStorage`'a yazmaz; veriler yalnızca aşağıdaki isteklerde
-gönderilir.
+Fit-matik yalnızca telefon/şifre ile oturum açar. Google OAuth, kayıt
+sırasında tema seçimi ve ayrı bir onboarding akışı bu sürümde yoktur.
+Tarayıcı şifreyi veya profil bilgisini `localStorage`'a yazmaz; oturum yalnızca
+sunucunun ayarladığı HTTP-only `fm_session` çerezidir.
 
-## Google OAuth kurulumu
+## Ortak doğrulama
 
-- Google OAuth istemci kimliği ve gizli anahtarı yalnızca sunucu ortam
-  değişkenlerinde tutulmalı; repoya veya tarayıcıya girmemeli.
-- Uygulamanın Google sağlayıcı ayarındaki yetkili yönlendirme adresi backend
-  callback'i olmalı. Callback başarılı girişten sonra profil eksikse
-  `/onboarding`, tamam ise `/upload` yoluna dönmeli.
-- Ön yüz Google akışını `GET /api/auth/google?returnTo=/onboarding` veya
-  `GET /api/auth/google?returnTo=/upload` ile başlatır. `returnTo` sadece site
-  içi bir yol olarak doğrulanmalı.
+- Telefon, API'ye gönderilmeden önce E.164 biçimine normalize edilir.
+  `05XX XXX XX XX`, `5XXXXXXXXX` ve `+90 5XX XXX XX XX` aynı Türkçe numara
+  için `+905XXXXXXXXX` olur.
+- Şifre 8–128 karakterdir; yalnızca ASCII `A-Z`, `a-z` ve `0-9` kabul edilir.
+  İstemci ve sunucu aynı kuralı uygular.
+- Hata gövdesi kullanıcıya gösterilebilir Türkçe metinle
+  `{ "error": "…" }` biçimindedir.
 
-## Telefon / şifre uçları
-
-### `POST /api/auth/sign-in`
+## `POST /api/auth/sign-in`
 
 İstek:
 
@@ -26,16 +23,17 @@ gönderilir.
 { "phone": "+905XXXXXXXXX", "password": "yalnızca-istek-gövdesinde" }
 ```
 
-Başarılı yanıt:
+Başarılı yanıt HTTP-only oturum çerezini ayarlar ve aşağıdaki biçimdedir:
 
 ```json
-{ "ok": true, "profileComplete": true, "next": "/upload" }
+{ "ok": true, "next": "/upload", "account": { "id": "…" } }
 ```
 
-Profil eksikse `profileComplete: false` veya `next: "/onboarding"` dönmeli.
-Telefon için E.164'e normalizasyon ve şifre hashleme backend sorumluluğundadır.
+Geçersiz telefon veya şifre ayrımı yapılmadan `401` ve `Numara ya da şifre
+hatalı.` döner. Üretimde en az 32 baytlık sabit `APP_SECRET` yoksa `503`
+döner; varsayılan/geliştirme gizlisi üretimde kullanılmaz.
 
-### `POST /api/auth/sign-up`
+## `POST /api/auth/sign-up`
 
 İstek:
 
@@ -49,39 +47,22 @@ Telefon için E.164'e normalizasyon ve şifre hashleme backend sorumluluğundad�
     "heightCm": 175,
     "weightKg": 72.5,
     "gender": "erkek"
-  },
-  "theme": "kagit"
+  }
 }
 ```
 
-`theme` değerleri mevcut ön yüz kimlikleriyle eşleşir: `kagit` = Pembe,
-`pegasus` = Kırmızı, `karbon` = Siyah. Başarılı yanıtta HTTP-only oturum çerezi
-ayarlanmalı ve `{ "ok": true, "next": "/upload" }` dönmelidir.
+`gender` yalnızca `kadin`, `erkek` veya `belirtmek-istemiyorum` olabilir.
+Başarılı kayıt atomik olarak hesabı, siyah/neon yeşil temayı, 5.000 Fitcoin
+cüzdanını ve başlangıç muhasebe kaydını oluşturur; ardından aynı HTTP-only
+oturum çerezini ve `{ "ok": true, "next": "/upload", "account": { … } }`
+yanıtını döner.
 
-## Google sonrası profil tamamlama
+## Oturumla korunan hesap ayarları
 
-Google ile giriş yapan kişinin kimliği zaten oturumdan alınır. Ön yüz sadece:
+`GET /api/me` yalnızca oturumdaki hesabın güvenli profilini döner.
+`PUT /api/me` profil, hedef ve temayı günceller. Geçerli tema değerleri
+`siyah`, `kirmizi`, `mor` ve `pembe`dir. Tema Ayarlar ekranında önizlenebilir;
+kalıcı olması için `PUT /api/me` başarılı olmalıdır.
 
-```http
-PUT /api/auth/onboarding
-Content-Type: application/json
-```
-
-ile aşağıdaki gövdeyi yollar:
-
-```json
-{
-  "profile": {
-    "name": "Salih",
-    "age": 30,
-    "heightCm": 175,
-    "weightKg": 72.5,
-    "gender": "erkek"
-  },
-  "theme": "kagit"
-}
-```
-
-Profil alanları kullanıcı hesabına bağlı kalıcı bir profile yazılmalı; parola
-asla bu profil tablosunda veya loglarda tutulmamalıdır. Tüm hata yanıtları
-`{ "error": "Kullanıcıya gösterilebilecek Türkçe mesaj" }` biçiminde dönmelidir.
+`POST /api/auth/sign-out`, sunucudaki oturum çerezini siler. Ön yüz de önceki
+hesabın yerel tema önbelleğini temizleyip varsayılan siyah temaya döner.

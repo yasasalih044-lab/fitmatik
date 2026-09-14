@@ -8,10 +8,12 @@ import TokenMeter from "@/components/TokenMeter";
 import { ShinyButton } from "@/components/ui/shiny-button";
 import { ShiningText } from "@/components/ui/shining-text";
 import { confidenceLabel, currentDayStart, kcal, todayKey, dayKey } from "@/lib/format";
-import type { AnalyzeResult, Entry, TokenUsage } from "@/lib/types";
+import type { AnalysisChargeReceipt } from "@/lib/billing";
+import type { AnalyzeResult, Entry } from "@/lib/types";
 
 type Mode = "text" | "image";
 type Phase = "idle" | "parsing" | "researching";
+type AnalyzeAttempt = { idempotencyKey: string; eatenAt: string };
 
 const EXAMPLES = [
   "iki dilim ekmek, bir haşlanmış yumurta ve çay",
@@ -50,8 +52,8 @@ export default function UploadClient() {
   const [entry, setEntry] = useState<Entry | null>(null);
   const [error, setError] = useState<string>("");
   const [todayTotal, setTodayTotal] = useState<number | null>(null);
-  const [lastUsage, setLastUsage] = useState<TokenUsage | null>(null);
-  const [sessionUsage, setSessionUsage] = useState<TokenUsage>({ input: 0, output: 0, total: 0 });
+  const [lastReceipt, setLastReceipt] = useState<AnalysisChargeReceipt | null>(null);
+  const [attempt, setAttempt] = useState<AnalyzeAttempt | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -81,6 +83,7 @@ export default function UploadClient() {
     const file = e.target.files?.[0];
     if (!file) return;
     setError("");
+    setAttempt(null);
     try {
       setImage(await compress(file));
       setMode("image");
@@ -94,36 +97,40 @@ export default function UploadClient() {
     setError("");
     setResult(null);
     setEntry(null);
+    setLastReceipt(null);
     setPhase("parsing");
     const toResearch = setTimeout(() => setPhase("researching"), 5000);
+    const activeAttempt = attempt || { idempotencyKey: crypto.randomUUID(), eatenAt: new Date().toISOString() };
+    if (!attempt) setAttempt(activeAttempt);
 
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: mode, text, image: mode === "image" ? image : undefined }),
+        headers: { "Content-Type": "application/json", "Idempotency-Key": activeAttempt.idempotencyKey },
+        body: JSON.stringify({ source: mode, text, image: mode === "image" ? image : undefined, eaten_at: activeAttempt.eatenAt }),
         signal: AbortSignal.timeout(280_000),
       });
       // Ara katman HTML hata sayfası döndürebilir; res.json() tek başına güvenli değil.
       const raw = await res.text();
-      let data: { result?: AnalyzeResult; entry?: Entry | null; error?: string } = {};
+      let data: {
+        result?: AnalyzeResult;
+        entry?: Entry | null;
+        billing?: AnalysisChargeReceipt | null;
+        error?: string;
+        retry_with_new_key?: boolean;
+      } = {};
       try {
         data = raw ? JSON.parse(raw) : {};
       } catch {
-        throw new Error(`Sunucudan beklenmeyen yanıt geldi (${res.status}).`);
+        throw new Error("Sunucudan beklenmeyen yanıt geldi (" + res.status + ").");
       }
-      if (!res.ok) throw new Error(data.error || `İstek başarısız (${res.status}).`);
+      if (!res.ok) {
+        if (data.retry_with_new_key) setAttempt(null);
+        throw new Error(data.error || "İstek başarısız (" + res.status + ").");
+      }
       setResult(data.result!);
       setEntry(data.entry ?? null);
-      const u = data.result?.usage;
-      if (u) {
-        setLastUsage(u);
-        setSessionUsage((prev) => ({
-          input: prev.input + u.input,
-          output: prev.output + u.output,
-          total: prev.total + u.total,
-        }));
-      }
+      setLastReceipt(data.billing ?? null);
       if (data.entry) void refreshToday();
       requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     } catch (e) {
@@ -152,6 +159,8 @@ export default function UploadClient() {
     setError("");
     setText("");
     setImage("");
+    setLastReceipt(null);
+    setAttempt(null);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -159,8 +168,6 @@ export default function UploadClient() {
 
   return (
     <div className="meal-workspace">
-      <TokenMeter last={lastUsage} session={sessionUsage} />
-
       <section className="meal-composer rise" aria-labelledby="meal-title">
         <div className="meal-composer__heading">
           <div>
@@ -181,7 +188,12 @@ export default function UploadClient() {
               type="button"
               role="tab"
               aria-selected={mode === m}
-              onClick={() => setMode(m)}
+              onClick={() => {
+                if (m !== mode) {
+                  setMode(m);
+                  setAttempt(null);
+                }
+              }}
               disabled={busy}
               className={mode === m ? "is-active" : ""}
             >
@@ -195,7 +207,10 @@ export default function UploadClient() {
           <div className="meal-entry">
             <textarea
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                setAttempt(null);
+              }}
               rows={5}
               disabled={busy}
               placeholder="Örn: iki dilim ekmek, bir haşlanmış yumurta ve çay"
@@ -203,7 +218,15 @@ export default function UploadClient() {
             />
             <div className="meal-examples" aria-label="Örnek kayıtlar">
               {EXAMPLES.map((ex) => (
-                <button key={ex} type="button" onClick={() => setText(ex)} disabled={busy}>
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => {
+                    setText(ex);
+                    setAttempt(null);
+                  }}
+                  disabled={busy}
+                >
                   {ex}
                 </button>
               ))}
@@ -231,7 +254,10 @@ export default function UploadClient() {
             <input
               type="text"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                setAttempt(null);
+              }}
               disabled={busy}
               placeholder="Not (isteğe bağlı): yarısını yedim, 2 paket…"
               className="meal-note"
@@ -269,12 +295,19 @@ export default function UploadClient() {
               <div className="card rise space-y-3 p-4">
                 <p className="eyebrow">Kaydedilmedi</p>
                 <p className="text-[15px] leading-snug">{result.rejected.reason}</p>
-                <button type="button" onClick={() => setMode("text")} className="btn btn-ghost w-full py-2.5 text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("text");
+                    setAttempt(null);
+                  }}
+                  className="btn btn-ghost w-full py-2.5 text-sm"
+                >
                   Yazıyla gir
                 </button>
               </div>
             ) : (
-              <ResultCard result={result} saved={!!entry} onDelete={removeEntry} onNew={reset} />
+              <ResultCard result={result} receipt={lastReceipt} saved={!!entry} onDelete={removeEntry} onNew={reset} />
             )}
           </div>
         )}
@@ -300,11 +333,13 @@ function Step({ active, done, label }: { active: boolean; done: boolean; label: 
 
 function ResultCard({
   result,
+  receipt,
   saved,
   onDelete,
   onNew,
 }: {
   result: AnalyzeResult;
+  receipt: AnalysisChargeReceipt | null;
   saved: boolean;
   onDelete: () => void;
   onNew: () => void;
@@ -363,6 +398,8 @@ function ResultCard({
           ))}
         </div>
       )}
+
+      <TokenMeter usage={result.usage} receipt={receipt} />
 
       <div className="flex items-center justify-between gap-2 p-3">
         <span className="eyebrow pl-1">{saved ? "Günlüğe yazıldı" : "Kaydedilmedi"}</span>

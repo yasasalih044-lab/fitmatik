@@ -2,38 +2,33 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import BackgroundPicker from "./BackgroundPicker";
 import PageReveal from "./PageReveal";
+import Velaris from "./ui/velaris";
 import { lastSeenStamp, normalizeTheme, rememberTheme } from "@/lib/theme";
 import { useEffect, useState } from "react";
-
-/** Tema eşitlemesi oturumda bir kez; her gezinmede tekrarlanmasın. */
-let themeSynced = false;
 
 export default function Chrome({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [storeWarning, setStoreWarning] = useState("");
 
-  // Tema hem cihazda hem hesapta duruyor. Cihazdaki seçim sahiptir; sunucu
-  // kopyası yalnızca İSPATLANABİLİR şekilde daha yeniyse kazanır.
-  //
-  // Eskiden bu efekt koşulsuz "sunucu otorite" diyordu ve `Chrome` ortak bir
-  // layout'ta olmadığı için her sayfa geçişinde yeniden çalışıyordu; nesne
-  // deposundan gelen tek bir bayat okuma localStorage'a da yazılıp kalıcı hale
-  // geliyordu. Karşılaştırma artık iki sunucu damgası arasında (saat farkından
-  // etkilenmez) ve oturumda bir kez yapılıyor.
+  // Sunucu damgası ve seçilen tema hesap kimliğiyle eşleştirilir. Böylece
+  // aynı cihazda daha önce giriş yapılmış başka bir hesabın teması kazanmaz.
   useEffect(() => {
-    if (themeSynced) return;
-    themeSynced = true;
-
     const ctrl = new AbortController();
     fetch("/api/me", { cache: "no-store", signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const account = d?.account;
-        if (!account?.updated_at) return;
-        if (account.updated_at <= lastSeenStamp()) return; // bizim bildiğimiz daha yeni
-        rememberTheme(normalizeTheme(account.theme), account.updated_at);
+        if (!account?.id || !account.updated_at) return;
+        const serverTheme = normalizeTheme(account.theme);
+        // Login ve çıkış ekranları güvenle varsayılan temayla başlar. Aynı
+        // hesabın damgası değişmemiş olsa bile bu ekrana dönerken sunucunun
+        // temasını yeniden uygula; aksi halde siyah tema kalabilirdi.
+        if (
+          account.updated_at <= lastSeenStamp(account.id) &&
+          document.documentElement.dataset.theme === serverTheme
+        ) return;
+        rememberTheme(serverTheme, account.updated_at, account.id);
       })
       .catch(() => {});
 
@@ -43,9 +38,9 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
   // Depolama düzgün bağlı değilse kayıtlar kalıcı olmaz — bunu saklama.
   useEffect(() => {
     fetch("/api/health", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((h) => setStoreWarning(h.store === "memory" ? "Kalıcı depolama bağlı değil. Kayıtlar sunucu yeniden başlayınca silinir." : ""))
-      .catch(() => {});
+      .then((r) => r.json().catch(() => null))
+      .then((h) => setStoreWarning(h?.store === "postgres" && h?.session_configured ? "" : "Kalıcı depolama veya oturum imzası hazır değil. Yeni kayıtlar kaydedilemez."))
+      .catch(() => setStoreWarning("Kalıcı depolama durumu okunamadı. Yeni kayıtlar kaydedilemez."));
   }, []);
 
   const tabs = [
@@ -56,8 +51,7 @@ export default function Chrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <BackgroundPicker />
-      <div className="app-page-art" aria-hidden />
+      <Velaris />
       <div className="app-shell">
         <header className="app-header safe-top">
           {/* Logo dosyası temayla değişiyor: yeşilli sürüm yalnızca siyah temada. */}

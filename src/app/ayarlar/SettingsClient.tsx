@@ -1,19 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { rememberTheme, THEMES, type ThemeId } from "@/lib/theme";
-import { useRef } from "react";
+import { forgetTheme, previewTheme, rememberTheme, THEMES, type ThemeId } from "@/lib/theme";
 import type { PublicAccount } from "@/lib/accounts";
 
 type Draft = { name: string; age: string; heightCm: string; weightKg: string; gender: string };
 type Targets = { kcal: number; protein_g: number; carbs_g: number; fat_g: number };
+type Wallet = {
+  available_fitcoin: number;
+  reserved_fitcoin: number;
+  lifetime_spent_fitcoin: number;
+};
+type LedgerItem = {
+  id: string;
+  kind: "initial_grant" | "reservation" | "settlement" | "release" | "adjustment";
+  available_delta_fitcoin: number;
+  reserved_delta_fitcoin: number;
+  created_at: string;
+};
 
 const GENDERS = [
   { id: "kadin", label: "Kadın" },
   { id: "erkek", label: "Erkek" },
   { id: "belirtmek-istemiyorum", label: "Belirtmek istemiyorum" },
 ] as const;
+
+const THEME_DESCRIPTIONS: Record<ThemeId, string> = {
+  siyah: "Neon yeşil",
+  kirmizi: "Açık turuncu",
+  mor: "Neon pembe",
+  pembe: "Beyaz ve mor",
+};
+
+const fitcoin = (value: number) => value.toLocaleString("tr-TR");
+const ledgerLabel: Record<LedgerItem["kind"], string> = {
+  initial_grant: "Başlangıç bakiyesi",
+  reservation: "Analiz için ayrıldı",
+  settlement: "Analiz harcaması",
+  release: "Rezervasyon iadesi",
+  adjustment: "Bakiye düzeltmesi",
+};
+
+function ledgerChange(item: LedgerItem): number {
+  return item.available_delta_fitcoin + item.reserved_delta_fitcoin;
+}
 
 function Field({
   label, value, onChange, suffix, inputMode = "text",
@@ -44,13 +75,20 @@ export default function SettingsClient() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [targets, setTargets] = useState<Targets | null>(null);
   const [theme, setTheme] = useState<ThemeId | null>(null);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [ledger, setLedger] = useState<LedgerItem[]>([]);
+  const [walletError, setWalletError] = useState("");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   // Kullanıcı temaya dokunduysa geç düşen yükleme cevabı seçimini ezmesin.
   const touchedTheme = useRef(false);
+  // Bir seçim yalnızca Kaydet başarılı olduğunda hesap ayarı olur. Sayfadan
+  // ayrılırken kaydedilmemiş önizlemeyi eski, sunucu tarafındaki temaya çevir.
+  const savedTheme = useRef<ThemeId | null>(null);
 
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
+    const ctrl = new AbortController();
+    fetch("/api/me", { cache: "no-store", signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Oturum yok."))))
       .then(({ account }: { account: PublicAccount }) => {
         setAccount(account);
@@ -62,15 +100,44 @@ export default function SettingsClient() {
           gender: account.profile.gender,
         });
         setTargets(account.targets);
-        if (!touchedTheme.current) setTheme(account.theme);
+        if (!touchedTheme.current) {
+          setTheme(account.theme);
+          savedTheme.current = account.theme;
+          rememberTheme(account.theme, account.updated_at, account.id);
+        }
       })
-      .catch(() => router.replace("/login"));
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        router.replace("/login");
+      });
+    return () => ctrl.abort();
   }, [router]);
+
+  useEffect(() => {
+    return () => {
+      if (touchedTheme.current && savedTheme.current) previewTheme(savedTheme.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch("/api/fitcoin?limit=8", { cache: "no-store", signal: ctrl.signal })
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Fitcoin okunamadı."))))
+      .then(({ wallet: nextWallet, ledger: nextLedger }: { wallet: Wallet; ledger: LedgerItem[] }) => {
+        setWallet(nextWallet);
+        setLedger(nextLedger);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setWalletError("Fitcoin bakiyesi şu an okunamıyor.");
+      });
+    return () => ctrl.abort();
+  }, []);
 
   function applyTheme(id: ThemeId) {
     touchedTheme.current = true;
     setTheme(id);
-    rememberTheme(id);
+    previewTheme(id);
   }
 
   async function save(retarget = false) {
@@ -104,13 +171,18 @@ export default function SettingsClient() {
     const { account } = (await res.json()) as { account: PublicAccount };
     setAccount(account);
     setTargets(account.targets);
+    savedTheme.current = account.theme;
+    touchedTheme.current = false;
     // Sunucunun taze damgasını işaretle: bir sonraki eşitleme bunu eskitemez.
-    rememberTheme(account.theme, account.updated_at);
+    rememberTheme(account.theme, account.updated_at, account.id);
     setStatus({ kind: "ok", text: retarget ? "Hedefler yeniden hesaplandı." : "Kaydedildi." });
   }
 
   async function signOut() {
     await fetch("/api/auth/sign-out", { method: "POST" });
+    // Unmount temizliği, çıkıştaki varsayılan temayı eski önizlemeyle ezmesin.
+    touchedTheme.current = false;
+    forgetTheme();
     router.replace("/login");
   }
 
@@ -154,24 +226,77 @@ export default function SettingsClient() {
         </div>
       </section>
 
+      {/* --- Fitcoin --- */}
+      <section className="card space-y-4 p-4" aria-labelledby="fitcoin-title">
+        <div className="space-y-1">
+          <p id="fitcoin-title" className="eyebrow">Fitcoin</p>
+          <p className="text-[13px] leading-snug text-[var(--muted)]">
+            10.000 Fitcoin = $1. Satın alma henüz açık değil; bakiye ve harcamaların burada görünür.
+          </p>
+        </div>
+
+        {wallet ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md border border-[var(--rule)] bg-[var(--accent-wash)] p-3">
+                <p className="eyebrow">Kullanılabilir</p>
+                <p className="figure mt-1 text-[30px] leading-none text-[var(--accent-ink)]">{fitcoin(wallet.available_fitcoin)} FC</p>
+              </div>
+              <div className="rounded-md border border-[var(--rule)] p-3">
+                <p className="eyebrow">Toplam harcama</p>
+                <p className="figure mt-1 text-[30px] leading-none">{fitcoin(wallet.lifetime_spent_fitcoin)} FC</p>
+              </div>
+            </div>
+            {wallet.reserved_fitcoin > 0 && (
+              <p className="rounded-md border border-[var(--accent-border)] bg-[var(--accent-wash)] px-3 py-2 text-[12px] text-[var(--muted)]">
+                {fitcoin(wallet.reserved_fitcoin)} FC devam eden analiz için ayrıldı.
+              </p>
+            )}
+            {ledger.length > 0 && (
+              <div className="space-y-2 border-t border-[var(--rule)] pt-3">
+                <p className="eyebrow">Son hareketler</p>
+                <ol className="space-y-2">
+                  {ledger.slice(0, 5).map((item) => {
+                    const change = ledgerChange(item);
+                    return (
+                      <li key={item.id} className="flex items-center justify-between gap-3 text-[12px]">
+                        <span className="min-w-0 truncate text-[var(--muted)]">{ledgerLabel[item.kind]}</span>
+                        <span className={change < 0 ? "mono shrink-0 text-[var(--red-ink)]" : "mono shrink-0 text-[var(--accent-ink)]"}>
+                          {change > 0 ? "+" : ""}{fitcoin(change)} FC
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="mono text-[12px] text-[var(--faint)]">{walletError || "Fitcoin bakiyesi yükleniyor…"}</p>
+        )}
+      </section>
+
       {/* --- Tema --- */}
       <section className="card space-y-3 p-4">
-        <p className="eyebrow">Tema</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="space-y-1">
+          <p className="eyebrow">Tema</p>
+          <p className="text-[13px] leading-snug text-[var(--muted)]">Seçimini önizle; Kaydet&apos;e bastığında tüm cihazlarında kalır.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {THEMES.map((t) => (
             <button
               key={t.id}
               onClick={() => applyTheme(t.id)}
               aria-pressed={theme === t.id}
-              className={`overflow-hidden rounded-md border text-left transition-transform ${
-                theme === t.id ? "border-[var(--red)]" : "border-[var(--rule)] hover:scale-[1.02]"
-              }`}
+              data-theme-option={t.id}
+              data-selected={theme === t.id}
+              className="theme-option"
             >
-              <span
-                className="block h-16 w-full bg-cover bg-center"
-                style={{ backgroundImage: `url(/auth/backgrounds/${t.id}-mobile.png)` }}
-              />
-              <span className="mono block px-2 py-1.5 text-[11px] text-[var(--muted)]">{t.label}</span>
+              <span className="theme-option__swatch" aria-hidden="true" />
+              <span className="theme-option__copy">
+                <strong>{t.label}</strong>
+                <small>{THEME_DESCRIPTIONS[t.id]}</small>
+              </span>
             </button>
           ))}
         </div>

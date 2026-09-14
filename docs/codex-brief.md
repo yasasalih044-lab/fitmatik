@@ -1,4 +1,12 @@
-# Fit-matik — Codex görev brifingi
+> **ARŞİV — 14 Eylül 2026.** Bu belge önceki uygulama mimarisinin tarihsel
+> görev notudur; güncel çalışma sözleşmesi değildir. İçindeki Storage/memory
+> fallback, Google/onboarding, eski tema kimlikleri ve ayrı backend ajanı
+> referanslarını uygulamayın. Güncel kurulum ve mimari için
+> [`README.md`](../README.md), oturum sözleşmesi için
+> [`auth-frontend-contract.md`](./auth-frontend-contract.md), veritabanı için
+> `supabase/migrations/20260914130000_account_scoped_fitcoin.sql` esas alınır.
+
+# Fit-matik — Codex görev brifingi (arşiv)
 
 Bu projeyi hiç görmedin. Aşağıda ihtiyacın olan her şey var. Sonunda **senin
 görevin** bölümü geliyor; oraya kadar olan kısım bağlam.

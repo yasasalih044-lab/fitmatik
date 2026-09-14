@@ -46,7 +46,12 @@ export default function DashboardClient() {
   }
 
   useEffect(() => {
-    void load();
+    // İlk istek sonraki görevde başlasın; React'ın effect fazında eşzamanlı
+    // state güncellemesi yapıp gereksiz bir render zinciri başlatmıyoruz.
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
 
@@ -274,4 +279,3 @@ function sumOf(day: Day | undefined, key: "protein_g" | "carbs_g" | "fat_g"): nu
   if (!day) return 0;
   return day.entries.reduce((a, e) => a + (typeof e[key] === "number" ? (e[key] as number) : 0), 0);
 }
-

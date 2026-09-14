@@ -1,98 +1,100 @@
 # Fit-matik
 
-Ne yediğini yaz ya da paketli bir ürünün fotoğrafını çek; Fit-matik kalorisini
-araştırıp günlüğüne yazar. iPhone'da Safari ana ekran kısayolu olarak kullanılmak
-üzere tasarlandı.
+Fit-matik, yazıyla veya paket fotoğrafıyla öğün analizi yapan; sonucu hesaba
+bağlı günlükte tutan ve her başarılı analiz için Fitcoin makbuzu gösteren bir
+Next.js uygulamasıdır.
 
-## Nasıl çalışır
+## Ana davranışlar
 
-İki aşamalı bir boru hattı:
+- Telefon numarası tek E.164 kimliğine normalize edilir. Şifre yalnızca
+  ASCII harf/rakamdan oluşur ve 8–128 karakterdir; aynı kurallar istemci ve
+  sunucuda uygulanır.
+- Hesap, günlük kayıtları ve özel yemek görselleri ayrı kullanıcı kapsamına
+  sahiptir. Her korumalı istekte imzalı oturum ve hesap sunucuda doğrulanır.
+- Yeni hesaplar siyah/neon yeşil temayla ve bir kerelik 5.000 Fitcoin ile
+  başlar.
+- Dört kalıcı tema Ayarlar'dan seçilir: siyah/neon yeşil, kırmızı/açık
+  turuncu, mor/neon pembe, pembe/beyaz-mor.
+- WebGL desteklenmezse veya azaltılmış hareket açıksa Velaris, sade CSS renk
+  zeminiyle çalışmaya devam eder.
+- Google ile giriş, tema görsel seçicileri ve eski dokulu arka planlar yoktur.
 
-1. **Ayrıştırma** — `gpt-5-mini`, serbest metni ya da etiket fotoğrafını yapılandırılmış
-   yemek kalemlerine çevirir (ad, miktar, marka, etiket besin değerleri).
-   Fotoğraf modunda **yalnızca paketli gıda** kabul edilir; tabak yemeği reddedilir.
-2. **Veritabanı eşleştirme** — paketli/markalı kalemler **Open Food Facts**'te aranır.
-   Barkod varsa doğrudan o ürün çekilir (en güvenilir yol). Eşleştirme kasten katıdır:
-   ürün adında bilmediğimiz ayırt edici bir kelime varsa ("Gong" ararken "Gong Pops")
-   eşleşme sayılmaz — yanlış ürünü "veritabanı" damgasıyla sunmak, web tahmininden
-   daha yanıltıcı olur.
-3. **Araştırma** — aynı model, web arama aracıyla her kalemin kalorisini internetten
-   toplar, kaynakların söylediği **aralığı** ve tek bir en iyi tahmini üretir:
-   *"188-245 arası söyleniyor ama büyük ihtimalle 213 kalori"*. Veritabanı eşleşmesi
-   varsa o bağlayıcıdır, web'i ezer.
+## Fitcoin
 
-Aritmetik modele bırakılmaz: **model porsiyonu tahmin eder, veritabanı/etiket 100 g
-başına değeri verir, çarpmayı kod yapar.** Her kalemin yanında sayının nereden geldiği
-yazar — `ETİKET` · `BARKOD` · `VERİTABANI` · `WEB` · `TAHMİN`.
+Ölçek 10.000 FC = $1 şeklindedir. Analiz başlamadan önce üst maliyet kadar
+Fitcoin atomik olarak rezerve edilir; başarılı analizde yalnız gerçekleşen
+maliyet alınır, kalan tutar iade edilir. Aynı Idempotency-Key ile yapılan
+tekrarlar ikinci kez ücretlendirilmez.
 
-Sonuç Supabase'e yazılır, `/dashboard`'da gün gün görünür.
+Her başarılı analiz, iki OpenAI aşamasının token kullanımını, gerçek web arama
+sayısını, sürümlenmiş fiyat kartını ve değişmez muhasebe kaydını saklar.
+Uygulamadaki gpt-5-mini kartı, OpenAI'nin [model fiyatları](https://developers.openai.com/api/docs/models/gpt-5-mini)
+ve [araç fiyatları](https://developers.openai.com/api/docs/pricing) temel alınarak
+$0.25/M giriş, $0.025/M önbellekli giriş, $2/M çıkış ve $10/1k
+web araması olarak tanımlanmıştır.
 
-## Sayfalar
+Yetersiz bakiye, OpenAI çağrısından önce 402 döndürür. Başarısız veya
+geçersiz bir analiz Fitcoin düşmez.
 
-| Yol | İş |
+## Yerel kurulum
+
+    npm install
+    cp .env.example .env.local
+    npm run dev
+
+Gerekli ortam değişkenleri:
+
+| Değişken | Açıklama |
 |---|---|
-| `/upload` | Kayıt ekle — yazı veya paket fotoğrafı |
-| `/dashboard` | Günlük: bugünün toplamı, son 14 gün, kayıt dökümü |
-| `/login` | `APP_PIN` tanımlıysa PIN ekranı |
-| `/api/health` | Yapılandırma durumu (anahtar, Supabase, PIN) |
+| OPENAI_API_KEY | OpenAI sunucu anahtarı |
+| OPENAI_MODEL | Varsayılan gpt-5-mini |
+| SUPABASE_URL | Staging veya canlı Supabase proje URL'i |
+| SUPABASE_SERVICE_ROLE_KEY | Sadece sunucuda kullanılan service-role anahtarı |
+| SUPABASE_BUCKET | Varsayılan fitmatik-private |
+| APP_SECRET | Üretimde zorunlu; sabit, rastgele ve en az 32 bayt |
 
-## Kurulum
+FATSECRET_* değişkenleri isteğe bağlıdır. SUPABASE_URL veya
+SUPABASE_SERVICE_ROLE_KEY yoksa uygulama veri yazmayı reddeder; bellek ya da
+eski Storage yedeği yoktur.
 
-```bash
-npm install
-cp .env.example .env.local   # değerleri doldur
-npm run dev
-```
+## Supabase kurulumu
 
-### Supabase
+1. Ayrı bir **staging** Supabase projesi oluşturun.
+2. supabase/migrations/20260914130000_account_scoped_fitcoin.sql dosyasını
+   staging SQL Editor'de çalıştırın. supabase/schema.sql aynı içeriğin kolay
+   çalıştırılabilir kopyasıdır.
+3. Staging uygulamasına yalnızca staging Supabase değişkenlerini ve güçlü
+   APP_SECRET değerini verin.
+4. Kayıt → çıkış → yeniden giriş → Ayarlar → analiz makbuzu akışını
+   doğrulayın. Özel görsellerin yalnızca imzalı URL ile yüklendiğini ve RLS/
+   Storage politikalarının geniş erişim vermediğini kontrol edin.
+5. Coolify/Traefik'in uygulama konteynerine doğrudan internet erişimi
+   vermediğini; `X-Forwarded-For`, `X-Real-IP` ve varsa
+   `CF-Connecting-IP` başlıklarını istemciden silip güvenilir istemci adresiyle
+   yeniden yazdığını doğrulayın. Kayıt ve giriş deneme sınırları bu HMAClenmiş
+   adresi telefon sınırıyla birlikte kullanır.
+6. Staging doğrulanmadan canlıda hiçbir silme işlemi yapmayın.
 
-Uygulama iki depolama biçiminden birini **kendisi seçer**:
+supabase/reset-live-user-data.sql, kullanıcı onayıyla canlı geçiş anında
+çalıştırılmak üzere hazırlanmış, geri alınamaz kullanıcı-verisi temizliğidir.
+Bu dosya kaynak kodu, alan adı, ortam değişkenleri veya statik marka
+varlıklarına dokunmaz. Komut dosyası bu depo tarafından otomatik çalıştırılmaz.
 
-1. **Tablo** (tercih edilen) — `supabase/schema.sql` dosyasını Supabase panelindeki
-   **SQL Editor**'de çalıştırırsan `public.entries` tablosu oluşur ve uygulama ona yazar.
-2. **Storage** (yedek) — tablo yoksa kayıtlar `fitmatik` kovasına
-   `log/<gün>/<id>.json` yolunda birer dosya olarak yazılır. Kayıt başına tek dosya
-   kullanılır: nesne depoları üzerine yazmada bayat okuma dönebildiği için
-   oku‑değiştir‑yaz deseni araya giren kayıtları sessizce kaybederdi.
+## Kontroller
 
-Hangisinin etkin olduğunu `/api/health` içindeki `store` alanı söyler. Tablo sonradan
-açılırsa uygulama bir dakika içinde kendiliğinden ona geçer (eski Storage kayıtları
-taşınmaz). Uygulama sunucu tarafında `service_role` anahtarıyla yazar; RLS açıktır ve
-politika tanımlı değildir, yani anon anahtarla dışarıdan erişilemez.
+    npm test
+    npm run lint
+    npx tsc --noEmit
+    npm run build
 
-Kova `application/json` MIME tipine izin vermelidir (Storage sürücüsü için).
-
-### Ortam değişkenleri
-
-| Değişken | Zorunlu | Açıklama |
-|---|---|---|
-| `OPENAI_API_KEY` | evet | OpenAI anahtarı |
-| `OPENAI_MODEL` | hayır | Varsayılan `gpt-5-mini` |
-| `SUPABASE_URL` | evet | Proje URL'i |
-| `SUPABASE_SERVICE_ROLE_KEY` | evet | Service role anahtarı — asla istemciye gitmez |
-| `SUPABASE_BUCKET` | hayır | Varsayılan `fitmatik` |
-| `FATSECRET_CLIENT_ID` | hayır | FatSecret Platform API anahtarı |
-| `FATSECRET_CLIENT_SECRET` | hayır | FatSecret gizli anahtarı |
-| `FATSECRET_REGION` | hayır | Varsayılan `TR` |
-| `NEXT_PUBLIC_DAY_START_HOUR` | hayır | Günün başladığı saat, varsayılan `12` (derleme zamanı) |
-| `APP_PIN` | hayır | Boşsa site herkese açık olur |
-| `APP_SECRET` | hayır | PIN çerezi için tuz |
-
-Supabase tanımlı değilse uygulama çalışır ama kayıtları yalnızca bellekte tutar ve
-arayüzde bunu söyleyen bir uyarı gösterir.
-
-## Görünüm
-
-Kağıt zemin, mürekkep siyahı metin, sinyal kırmızısı vurgu. Her sayfa açılışında
-`public/motif/` içindeki dövme motiflerinden biri köşede beliriyor (WebP, ~58 KB,
-tembel yüklenir, `pointer-events: none`).
+Birim testleri telefon/şifre doğrulamasını, fiyatlandırma/yuvarlama
+invariantlarını, rezervasyon üst sınırını ve OpenAI kullanım makbuzlarının
+fail-closed davranışını kapsar. Gerçek eşzamanlı bakiye ve hesap-izolasyonu
+senaryoları staging Supabase üzerinde doğrulanmalıdır.
 
 ## Dağıtım
 
-`Dockerfile` Next.js standalone çıktısı üretir, 3000 portunu dinler. Coolify'da
-build pack `dockerfile`, expose port `3000`, ortam değişkenleri yukarıdaki tablodan.
-
-## iPhone kısayolu
-
-Safari'de siteyi aç → Paylaş → **Ana Ekrana Ekle**. Uygulama tam ekran açılır,
-`/upload` başlangıç sayfasıdır.
+Dockerfile, Next.js standalone çıktısı üretir ve 3000 portunu dinler.
+Coolify'da önce ayrı staging uygulaması ve ayrı Supabase verisi kullanılmalı;
+canlı fitmatik.mavrosai.site geçişi ancak staging kontrolleri ve canlı
+kullanıcı-verisi temizliği için tekrar onay alındıktan sonra yapılmalıdır.

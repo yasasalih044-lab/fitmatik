@@ -1,14 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Big_Shoulders, Instrument_Sans, JetBrains_Mono } from "next/font/google";
+import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { DEFAULT_THEME, THEME_BOOT_SCRIPT } from "@/lib/theme";
 
-const shoulders = Big_Shoulders({
-  variable: "--font-shoulders",
-  subsets: ["latin", "latin-ext"],
-  weight: ["600", "700", "800"],
-  display: "swap",
-});
 const instrument = Instrument_Sans({
   variable: "--font-instrument",
   subsets: ["latin", "latin-ext"],
@@ -30,7 +24,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#14070f",
+  themeColor: "#070a08",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -42,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
-      <body className={`${shoulders.variable} ${instrument.variable} ${jetbrains.variable}`}>{children}</body>
+      <body className={`${instrument.variable} ${jetbrains.variable}`}>{children}</body>
     </html>
   );
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { clampLimit, deleteEntry, listEntries } from "@/lib/store";
+import { currentAccount } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +20,11 @@ function fail(e: unknown, fallback: string) {
 }
 
 export async function GET(req: Request) {
+  const account = await currentAccount();
+  if (!account) return NextResponse.json({ error: "Oturum yok." }, { status: 401 });
   const url = new URL(req.url);
   try {
-    const entries = await listEntries({
+    const entries = await listEntries(account.id, {
       from: isoOrUndefined(url.searchParams.get("from")),
       to: isoOrUndefined(url.searchParams.get("to")),
       limit: clampLimit(url.searchParams.get("limit")),
@@ -33,14 +36,16 @@ export async function GET(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const account = await currentAccount();
+  if (!account) return NextResponse.json({ error: "Oturum yok." }, { status: 401 });
   const params = new URL(req.url).searchParams;
   const id = params.get("id");
   if (!id || !UUID.test(id)) {
     return NextResponse.json({ error: "Geçersiz kayıt kimliği." }, { status: 400 });
   }
-  const day = params.get("day");
   try {
-    await deleteEntry(id, /^\d{4}-\d{2}-\d{2}$/.test(day || "") ? day! : undefined);
+    const deleted = await deleteEntry(account.id, id);
+    if (!deleted) return NextResponse.json({ error: "Kayıt bulunamadı." }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch (e) {
     return fail(e, "Kayıt silinemedi.");

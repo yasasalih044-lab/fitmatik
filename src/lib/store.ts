@@ -1,291 +1,490 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Entry } from "./types";
 
-export const BUCKET = process.env.SUPABASE_BUCKET || "fitmatik";
-const TABLE = "entries";
-const LOG_PREFIX = "log";
+/** New private bucket. Do not point this at the legacy public `fitmatik` bucket. */
+export const BUCKET = process.env.SUPABASE_BUCKET || "fitmatik-private";
+const ENTRIES_TABLE = "app_entries";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_IMAGE_BYTES = 7 * 1024 * 1024;
+const SIGNED_IMAGE_TTL_SECONDS = 60 * 60;
 
-/** Kayıtların nereye yazıldığı. */
-export type Driver = "table" | "storage" | "memory";
+export class StoreConfigurationError extends Error {
+  constructor(message = "Supabase yapılandırılmamış.") {
+    super(message);
+    this.name = "StoreConfigurationError";
+  }
+}
+
+export class AccountScopeError extends Error {
+  constructor(message = "Hesap kapsamı geçersiz.") {
+    super(message);
+    this.name = "AccountScopeError";
+  }
+}
 
 export function supabaseConfigured(): boolean {
-  return !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
 let cached: SupabaseClient | null = null;
-function db(): SupabaseClient {
-  if (cached) return cached;
-  cached = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+
+/** Service-role client; this module is imported only by server code. */
+export function supabase(): SupabaseClient {
+  if (!supabaseConfigured()) throw new StoreConfigurationError();
+  if (!cached) {
+    cached = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
   return cached;
 }
 
-/* ------------------------------------------------------------------ */
-/* Sürücü seçimi                                                       */
-/*                                                                     */
-/* `entries` tablosu varsa onu kullan. Tablo yoksa (SQL henüz          */
-/* çalıştırılmadı) Supabase Storage'a günlük JSON dosyaları yaz —      */
-/* böylece uygulama tabloya bağımlı olmadan kalıcı çalışır. Tablo      */
-/* sonradan açılırsa bir sonraki yoklamada kendiliğinden ona geçer.    */
-/* ------------------------------------------------------------------ */
-let driverCache: { value: Driver; at: number } | null = null;
-const DRIVER_TTL_MS = 60_000;
-
-export async function driver(now = Date.now()): Promise<Driver> {
-  if (!supabaseConfigured()) return "memory";
-  if (driverCache && now - driverCache.at < DRIVER_TTL_MS) return driverCache.value;
-
-  const { error } = await db().from(TABLE).select("id").limit(1);
-  const value: Driver = error ? "storage" : "table";
-  if (error) console.warn(`[fitmatik] '${TABLE}' tablosu kullanılamıyor (${error.code || error.message}); Storage sürücüsüne geçiliyor.`);
-  driverCache = { value, at: now };
-  return value;
+/** Compatibility for the health endpoint: there is no Storage or memory fallback. */
+export type Driver = "postgres";
+export async function driver(): Promise<Driver> {
+  const { error } = await supabase().from(ENTRIES_TABLE).select("id").limit(1);
+  if (error) throw new Error(`Postgres doğrulanamadı: ${error.message}`);
+  return "postgres";
 }
 
-/* --- Yerel geliştirme yedeği (Supabase yapılandırılmamışsa) --------- */
-const memory: Entry[] = [];
+export type NewEntry = Omit<Entry, "id" | "created_at" | "image_url"> & {
+  /** Private Storage object path, produced by uploadImage. */
+  image_path?: string | null;
+  /** Transitional input shape; ignored so a public URL can never be persisted. */
+  image_url?: string | null;
+};
 
-export type NewEntry = Omit<Entry, "id" | "created_at">;
+type EntryRow = Omit<Entry, "image_url"> & { account_id: string; image_path: string | null };
 
-/* ------------------------------------------------------------------ */
-/* Storage sürücüsü — kayıt başına tek dosya: log/<gün>/<id>.json      */
-/*                                                                     */
-/* Gün başına tek dosya tutup oku-değiştir-yaz yapmak cazip ama        */
-/* nesne depoları üzerine yazmada bayat okuma döndürebilir: araya      */
-/* giren bir kayıt sessizce kaybolur. Değişmez tek-kayıt dosyaları     */
-/* bu sınıfı tamamen ortadan kaldırır.                                 */
-/* ------------------------------------------------------------------ */
+function assertAccountId(accountId: string): void {
+  if (!UUID.test(accountId)) throw new AccountScopeError();
+}
 
-const DAY_SCAN_LIMIT = 400;
-const FETCH_CHUNK = 12;
-const DAY_CHUNK = 8;
+function assertObjectPath(accountId: string, path: string): void {
+  if (!path.startsWith(`${accountId}/`) || path.includes("..")) {
+    throw new AccountScopeError("Görsel hesabın kapsamı dışında.");
+  }
+}
 
-const dayOf = (iso: string) => iso.slice(0, 10);
-const entryPath = (day: string, id: string) => `${LOG_PREFIX}/${day}/${id}.json`;
+/** A signed URL is created only after the entry has already been account-scoped in Postgres. */
+async function signedImageUrl(accountId: string, path: string): Promise<string> {
+  assertObjectPath(accountId, path);
+  const { data, error } = await supabase().storage.from(BUCKET).createSignedUrl(path, SIGNED_IMAGE_TTL_SECONDS);
+  if (error || !data?.signedUrl) throw new Error(`Görsel bağlantısı oluşturulamadı: ${error?.message || "bilinmeyen hata"}`);
+  return data.signedUrl;
+}
 
-async function putEntry(row: Entry): Promise<void> {
-  const body = new Blob([JSON.stringify(row)], { type: "application/json" });
-  const { error } = await db()
-    .storage.from(BUCKET)
-    .upload(entryPath(dayOf(row.eaten_at), row.id), body, {
-      contentType: "application/json",
-      cacheControl: "0",
-      upsert: true,
-    });
+async function hydrate(row: EntryRow): Promise<Entry> {
+  const image_url = row.image_path ? await signedImageUrl(row.account_id, row.image_path) : null;
+  return normalize({ ...row, image_url });
+}
+
+/**
+ * Insert a meal into the caller's account only. The one-argument signature is
+ * retained temporarily so a stale route still type-checks, but it always
+ * throws at runtime rather than falling back to a global entry store.
+ */
+export function insertEntry(entry: NewEntry): Promise<never>;
+export function insertEntry(accountId: string, entry: NewEntry): Promise<Entry>;
+export async function insertEntry(accountIdOrEntry: string | NewEntry, maybeEntry?: NewEntry): Promise<Entry> {
+  if (typeof accountIdOrEntry !== "string" || !maybeEntry) {
+    throw new AccountScopeError("Kayıt eklemek için doğrulanmış hesap gerekli.");
+  }
+  const accountId = accountIdOrEntry;
+  const entry = maybeEntry;
+  assertAccountId(accountId);
+  if (entry.image_path) assertObjectPath(accountId, entry.image_path);
+  const { image_url, image_path, ...columns } = entry;
+  void image_url;
+  const { data, error } = await supabase()
+    .from(ENTRIES_TABLE)
+    .insert({ ...columns, account_id: accountId, image_path: image_path || null })
+    .select("*")
+    .single();
   if (error) throw new Error(`Kayıt yazılamadı: ${error.message}`);
+  return hydrate(data as EntryRow);
 }
 
-async function getEntry(path: string): Promise<Entry | null> {
-  const { data, error } = await db().storage.from(BUCKET).download(path);
-  if (error || !data) return null;
-  try {
-    return JSON.parse(await data.text()) as Entry;
-  } catch {
-    console.error(`[fitmatik] ${path} bozuk JSON, atlandı.`);
-    return null;
-  }
+export async function listEntries(
+  accountId: string,
+  opts: { from?: string; to?: string; limit?: number } = {},
+): Promise<Entry[]> {
+  assertAccountId(accountId);
+  let query = supabase()
+    .from(ENTRIES_TABLE)
+    .select("*")
+    .eq("account_id", accountId)
+    .order("eaten_at", { ascending: false })
+    .limit(clampLimit(opts.limit));
+  if (opts.from) query = query.gte("eaten_at", opts.from);
+  if (opts.to) query = query.lte("eaten_at", opts.to);
+  const { data, error } = await query;
+  if (error) throw new Error(`Kayıtlar okunamadı: ${error.message}`);
+  return Promise.all((data || []).map((row) => hydrate(row as EntryRow)));
 }
 
-async function listNames(prefix: string, limit: number): Promise<string[]> {
-  const { data, error } = await db()
-    .storage.from(BUCKET)
-    .list(prefix, { limit, sortBy: { column: "name", order: "desc" } });
-  if (error) throw new Error(`Kayıtlar listelenemedi: ${error.message}`);
-  return (data || []).map((f) => f.name);
+/** Returns a single entry only when it belongs to the verified account. */
+export async function getEntry(accountId: string, id: string): Promise<Entry | null> {
+  assertAccountId(accountId);
+  if (!UUID.test(id)) throw new AccountScopeError("Kayıt kimliği geçersiz.");
+  const { data, error } = await supabase()
+    .from(ENTRIES_TABLE)
+    .select("*")
+    .eq("account_id", accountId)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(`Kayıt okunamadı: ${error.message}`);
+  return data ? hydrate(data as EntryRow) : null;
 }
 
-/** Gün klasörleri, yeniden eskiye. */
-async function listDays(): Promise<string[]> {
-  const names = await listNames(LOG_PREFIX, DAY_SCAN_LIMIT);
-  return names
-    .filter((n) => /^\d{4}-\d{2}-\d{2}$/.test(n))
-    .sort((a, b) => (a < b ? 1 : -1));
-}
+/** Delete only a row owned by the caller. A foreign ID behaves as not found. */
+export async function deleteEntry(accountId: string, id: string): Promise<boolean> {
+  assertAccountId(accountId);
+  if (!UUID.test(id)) throw new Error("Geçersiz kayıt kimliği.");
+  const { data, error } = await supabase()
+    .from(ENTRIES_TABLE)
+    .delete()
+    .eq("account_id", accountId)
+    .eq("id", id)
+    .select("image_path")
+    .maybeSingle();
+  if (error) throw new Error(`Kayıt silinemedi: ${error.message}`);
+  if (!data) return false;
 
-/** Bir günün kayıtlarını paralel çeker. */
-async function readDayEntries(day: string): Promise<Entry[]> {
-  const files = (await listNames(`${LOG_PREFIX}/${day}`, 1000)).filter((n) => n.endsWith(".json"));
-  const out: Entry[] = [];
-  for (let i = 0; i < files.length; i += FETCH_CHUNK) {
-    const batch = await Promise.all(
-      files.slice(i, i + FETCH_CHUNK).map((f) => getEntry(`${LOG_PREFIX}/${day}/${f}`)),
-    );
-    out.push(...batch.filter((e): e is Entry => !!e));
-  }
-  return out;
-}
-
-/* ------------------------------------------------------------------ */
-/* Genel API                                                           */
-/* ------------------------------------------------------------------ */
-
-export async function insertEntry(e: NewEntry): Promise<Entry> {
-  const d = await driver();
-
-  if (d === "table") {
-    const { data, error } = await db().from(TABLE).insert(e).select().single();
-    if (error) throw new Error(`Kayıt yazılamadı: ${error.message}`);
-    return normalize(data as Entry);
-  }
-
-  const row: Entry = { ...e, id: crypto.randomUUID(), created_at: new Date().toISOString() };
-
-  if (d === "memory") {
-    memory.unshift(row);
-    return row;
-  }
-
-  await putEntry(row);
-  return row;
-}
-
-export async function listEntries(opts: { from?: string; to?: string; limit?: number } = {}): Promise<Entry[]> {
-  const limit = clampLimit(opts.limit);
-  const inRange = (e: Entry) =>
-    (!opts.from || e.eaten_at >= opts.from) && (!opts.to || e.eaten_at <= opts.to);
-  const newestFirst = (a: Entry, b: Entry) => (a.eaten_at < b.eaten_at ? 1 : -1);
-  const d = await driver();
-
-  if (d === "table") {
-    let q = db().from(TABLE).select("*").order("eaten_at", { ascending: false }).limit(limit);
-    if (opts.from) q = q.gte("eaten_at", opts.from);
-    if (opts.to) q = q.lte("eaten_at", opts.to);
-    const { data, error } = await q;
-    if (error) throw new Error(`Kayıtlar okunamadı: ${error.message}`);
-    return (data || []).map(normalize);
-  }
-
-  if (d === "memory") return memory.filter(inRange).sort(newestFirst).slice(0, limit);
-
-  const days = (await listDays()).filter(
-    (day) => (!opts.from || day >= dayOf(opts.from)) && (!opts.to || day <= dayOf(opts.to)),
-  );
-
-  // Günleri sırayla değil öbekler hâlinde paralel çek; panelde 14+ gün var.
-  const out: Entry[] = [];
-  for (let i = 0; i < days.length; i += DAY_CHUNK) {
-    const batches = await Promise.all(days.slice(i, i + DAY_CHUNK).map(readDayEntries));
-    for (const rows of batches) out.push(...rows.filter(inRange));
-    if (out.length >= limit) break; // günler yeniden eskiye; yeterince topladık
-  }
-  return out.sort(newestFirst).slice(0, limit).map(normalize);
-}
-
-export async function deleteEntry(id: string, dayHint?: string): Promise<void> {
-  const d = await driver();
-  let removed: Entry | undefined;
-
-  if (d === "table") {
-    const { data, error } = await db().from(TABLE).delete().eq("id", id).select().maybeSingle();
-    if (error) throw new Error(`Kayıt silinemedi: ${error.message}`);
-    removed = (data as Entry) || undefined;
-  } else if (d === "memory") {
-    const i = memory.findIndex((e) => e.id === id);
-    if (i >= 0) removed = memory.splice(i, 1)[0];
-  } else {
-    // Gün ipucu varsa tek istekte bul; yoksa en yeni günden başlayarak tara.
-    const days = dayHint ? [dayHint, ...(await listDays()).filter((d) => d !== dayHint)] : await listDays();
-    for (const day of days) {
-      const path = entryPath(day, id);
-      const found = await getEntry(path);
-      if (!found) continue;
-      const { error } = await db().storage.from(BUCKET).remove([path]);
-      if (error) throw new Error(`Kayıt silinemedi: ${error.message}`);
-      removed = found;
-      break;
+  const imagePath = (data as { image_path?: string | null }).image_path;
+  if (imagePath) {
+    try {
+      assertObjectPath(accountId, imagePath);
+      const { error: imageError } = await supabase().storage.from(BUCKET).remove([imagePath]);
+      if (imageError) console.error("[fitmatik] yetim görsel silinemedi:", imageError.message);
+    } catch (error) {
+      console.error("[fitmatik] yetim görsel silinemedi:", error instanceof Error ? error.message : error);
     }
   }
-
-  if (removed?.image_url) await deleteImage(removed.image_url);
+  return true;
 }
 
-/** Kayıt silinince görseli de sil; yoksa kova yetim dosyalarla dolar. */
-async function deleteImage(publicUrl: string): Promise<void> {
-  const marker = `/object/public/${BUCKET}/`;
-  const i = publicUrl.indexOf(marker);
-  if (i < 0) return;
-  const path = decodeURIComponent(publicUrl.slice(i + marker.length).split("?")[0]);
-  const { error } = await db().storage.from(BUCKET).remove([path]);
-  if (error) console.error(`[fitmatik] görsel silinemedi (${path}): ${error.message}`);
+/**
+ * Uploads a data URL to a private per-account key. The returned value is an
+ * object path, not a URL and therefore cannot accidentally become public.
+ */
+/** As above, a stale one-argument caller fails closed instead of uploading globally. */
+export function uploadImage(dataUrl: string): Promise<never>;
+export function uploadImage(accountId: string, dataUrl: string): Promise<string>;
+export async function uploadImage(accountIdOrDataUrl: string, maybeDataUrl?: string): Promise<string> {
+  if (!maybeDataUrl) throw new AccountScopeError("Görsel yüklemek için doğrulanmış hesap gerekli.");
+  const accountId = accountIdOrDataUrl;
+  const dataUrl = maybeDataUrl;
+  assertAccountId(accountId);
+  const match = /^data:(image\/(?:jpeg|png|webp|avif|heic));base64,([A-Za-z0-9+/=\s]+)$/i.exec(dataUrl);
+  if (!match) throw new Error("Geçerli bir görsel yükle.");
+  const [, mime, base64] = match;
+  const bytes = Buffer.from(base64.replace(/\s/g, ""), "base64");
+  if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) throw new Error("Görsel çok büyük. Daha küçük bir fotoğraf dene.");
+
+  const ext = mime.toLowerCase().replace("image/", "").replace("jpeg", "jpg");
+  const path = `${accountId}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase().storage.from(BUCKET).upload(path, bytes, {
+    contentType: mime.toLowerCase(),
+    cacheControl: "private, max-age=0",
+    upsert: false,
+  });
+  if (error) throw new Error(`Görsel yüklenemedi: ${error.message}`);
+  return path;
 }
 
-/* --- Genel JSON nesne yardımcıları (hesaplar, profil, hedefler) ---------- */
-
-export async function getJsonObject<T>(path: string): Promise<T | null> {
-  if (!supabaseConfigured()) return null;
-  const { data, error } = await db().storage.from(BUCKET).download(path);
-  if (error || !data) return null;
-  try {
-    return JSON.parse(await data.text()) as T;
-  } catch {
-    console.error(`[fitmatik] ${path} bozuk JSON.`);
-    return null;
-  }
+/** Removes a private upload which was never linked to an entry transaction. */
+export async function discardUnlinkedImage(accountId: string, path: string): Promise<void> {
+  assertAccountId(accountId);
+  assertObjectPath(accountId, path);
+  const { error } = await supabase().storage.from(BUCKET).remove([path]);
+  if (error) throw new Error(`Yetim görsel silinemedi: ${error.message}`);
 }
 
-export async function putJsonObject(path: string, value: unknown): Promise<void> {
-  if (!supabaseConfigured()) throw new Error("Depolama yapılandırılmamış.");
-  const body = new Blob([JSON.stringify(value)], { type: "application/json" });
-  const { error } = await db()
-    .storage.from(BUCKET)
-    .upload(path, body, { contentType: "application/json", cacheControl: "0", upsert: true });
-  if (error) throw new Error(`Kayıt yazılamadı: ${error.message}`);
-}
-
-export async function removeObject(path: string): Promise<void> {
-  if (!supabaseConfigured()) return;
-  await db().storage.from(BUCKET).remove([path]);
-}
-
-/** Görseli Storage'a yükler, public URL döndürür. Yapılandırma yoksa null. */
-export async function uploadImage(dataUrl: string): Promise<string | null> {
-  if (!supabaseConfigured()) return null;
-  const m = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i.exec(dataUrl);
-  if (!m) return null;
-  const [, mime, b64] = m;
-  const ext = (mime.split("/")[1] || "jpg").replace("jpeg", "jpg");
-  const bytes = Buffer.from(b64, "base64");
-  const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
-
-  const client = db();
-  const { error } = await client.storage.from(BUCKET).upload(path, bytes, { contentType: mime, upsert: false });
-  if (error) {
-    console.error("[fitmatik] görsel yüklenemedi:", error.message);
-    return null;
-  }
-  return client.storage.from(BUCKET).getPublicUrl(path).data.publicUrl || null;
-}
-
-export function clampLimit(v: unknown): number {
-  const n = Math.floor(Number(v));
+export function clampLimit(value: unknown): number {
+  const n = Math.floor(Number(value));
   if (!Number.isFinite(n) || n < 1) return 500;
   return Math.min(n, 1000);
 }
 
-/** Postgres numeric alanları JS'e string olarak dönebilir; toplamlar bozulmasın. */
-function normalize(e: Entry): Entry {
-  const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
-  const int = (v: unknown) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? Math.round(n) : 0;
+/** PostgREST can return Postgres numerics as strings; UI totals expect numbers. */
+function normalize(entry: Entry): Entry {
+  const numberOrNull = (value: unknown) => (value === null || value === undefined || value === "" ? null : Number(value));
+  const integer = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.round(parsed) : 0;
   };
   return {
-    ...e,
-    items: (Array.isArray(e.items) ? e.items : []).map((i) => ({
-      ...i,
-      grams: num((i as { grams?: unknown }).grams),
-      protein_g: num((i as { protein_g?: unknown }).protein_g),
-      carbs_g: num((i as { carbs_g?: unknown }).carbs_g),
-      fat_g: num((i as { fat_g?: unknown }).fat_g),
-      barcode: (i as { barcode?: string | null }).barcode ?? null,
+    ...entry,
+    items: (Array.isArray(entry.items) ? entry.items : []).map((item) => ({
+      ...item,
+      grams: numberOrNull((item as { grams?: unknown }).grams),
+      protein_g: numberOrNull((item as { protein_g?: unknown }).protein_g),
+      carbs_g: numberOrNull((item as { carbs_g?: unknown }).carbs_g),
+      fat_g: numberOrNull((item as { fat_g?: unknown }).fat_g),
+      barcode: (item as { barcode?: string | null }).barcode ?? null,
     })),
-    sources: Array.isArray(e.sources) ? e.sources : [],
-    kcal_min: int(e.kcal_min),
-    kcal_max: int(e.kcal_max),
-    kcal_best: int(e.kcal_best),
-    protein_g: num(e.protein_g),
-    carbs_g: num(e.carbs_g),
-    fat_g: num(e.fat_g),
+    sources: Array.isArray(entry.sources) ? entry.sources : [],
+    kcal_min: integer(entry.kcal_min),
+    kcal_max: integer(entry.kcal_max),
+    kcal_best: integer(entry.kcal_best),
+    protein_g: numberOrNull(entry.protein_g),
+    carbs_g: numberOrNull(entry.carbs_g),
+    fat_g: numberOrNull(entry.fat_g),
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Fitcoin data helpers for protected routes and /api/analyze          */
+/* ------------------------------------------------------------------ */
+
+export type FitcoinWallet = {
+  available_fitcoin: number;
+  reserved_fitcoin: number;
+  lifetime_spent_fitcoin: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FitcoinLedgerItem = {
+  id: string;
+  analysis_run_id: string | null;
+  kind: "initial_grant" | "reservation" | "settlement" | "release" | "adjustment";
+  available_delta_fitcoin: number;
+  reserved_delta_fitcoin: number;
+  available_balance_fitcoin: number;
+  reserved_balance_fitcoin: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+const toNumber = (value: unknown) => Number(value ?? 0);
+
+function walletFromRow(row: Record<string, unknown>): FitcoinWallet {
+  return {
+    available_fitcoin: toNumber(row.available_fitcoin),
+    reserved_fitcoin: toNumber(row.reserved_fitcoin),
+    lifetime_spent_fitcoin: toNumber(row.lifetime_spent_fitcoin),
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+export async function getWallet(accountId: string): Promise<FitcoinWallet> {
+  assertAccountId(accountId);
+  const { data, error } = await supabase()
+    .from("fitcoin_wallets")
+    .select("available_fitcoin,reserved_fitcoin,lifetime_spent_fitcoin,created_at,updated_at")
+    .eq("account_id", accountId)
+    .single();
+  if (error) throw new Error(`Fitcoin bakiyesi okunamadı: ${error.message}`);
+  return walletFromRow(data as Record<string, unknown>);
+}
+
+export async function listLedger(accountId: string, limit = 50): Promise<FitcoinLedgerItem[]> {
+  assertAccountId(accountId);
+  const { data, error } = await supabase()
+    .from("fitcoin_ledger")
+    .select("id,analysis_run_id,kind,available_delta_fitcoin,reserved_delta_fitcoin,available_balance_fitcoin,reserved_balance_fitcoin,metadata,created_at")
+    .eq("account_id", accountId)
+    .order("created_at", { ascending: false })
+    .limit(Math.min(Math.max(Math.floor(limit), 1), 100));
+  if (error) throw new Error(`Fitcoin geçmişi okunamadı: ${error.message}`);
+  return (data || []).map((row) => {
+    const value = row as Record<string, unknown>;
+    return {
+      id: String(value.id),
+      analysis_run_id: value.analysis_run_id ? String(value.analysis_run_id) : null,
+      kind: value.kind as FitcoinLedgerItem["kind"],
+      available_delta_fitcoin: toNumber(value.available_delta_fitcoin),
+      reserved_delta_fitcoin: toNumber(value.reserved_delta_fitcoin),
+      available_balance_fitcoin: toNumber(value.available_balance_fitcoin),
+      reserved_balance_fitcoin: toNumber(value.reserved_balance_fitcoin),
+      metadata: (value.metadata || {}) as Record<string, unknown>,
+      created_at: String(value.created_at),
+    };
+  });
+}
+
+export type AnalysisRun = {
+  id: string;
+  status: "reserved" | "processing" | "succeeded" | "failed" | "rejected";
+  reserved_fitcoin: number;
+  charged_fitcoin: number;
+  entry_id: string | null;
+  result_json: unknown;
+  error: string | null;
+  provider_cost_status: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function analysisRunFromRow(row: Record<string, unknown>): AnalysisRun {
+  return {
+    id: String(row.id),
+    status: row.status as AnalysisRun["status"],
+    reserved_fitcoin: toNumber(row.reserved_fitcoin),
+    charged_fitcoin: toNumber(row.charged_fitcoin),
+    entry_id: row.entry_id ? String(row.entry_id) : null,
+    result_json: row.result_json ?? null,
+    error: row.error ? String(row.error) : null,
+    provider_cost_status: row.provider_cost_status ? String(row.provider_cost_status) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
+export async function getAnalysisRun(accountId: string, runId: string): Promise<AnalysisRun | null> {
+  assertAccountId(accountId);
+  if (!UUID.test(runId)) throw new AccountScopeError("Analiz kimliği geçersiz.");
+  const { data, error } = await supabase()
+    .from("analysis_runs")
+    .select("id,status,reserved_fitcoin,charged_fitcoin,entry_id,result_json,error,provider_cost_status,created_at,updated_at")
+    .eq("account_id", accountId)
+    .eq("id", runId)
+    .maybeSingle();
+  if (error) throw new Error(`Analiz kaydı okunamadı: ${error.message}`);
+  return data ? analysisRunFromRow(data as Record<string, unknown>) : null;
+}
+
+export type BeginAnalysis = {
+  analysis_run_id: string;
+  run_status: AnalysisRun["status"];
+  sufficient: boolean;
+  replayed: boolean;
+  available_fitcoin: number;
+  reserved_fitcoin: number;
+  reserved_amount_fitcoin: number;
+};
+
+export async function beginAnalysis(
+  accountId: string,
+  idempotencyKey: string,
+  requestDigest: string,
+  reserveFitcoin: number,
+): Promise<BeginAnalysis> {
+  assertAccountId(accountId);
+  const { data, error } = await supabase().rpc("fitcoin_begin_analysis", {
+    p_account_id: accountId,
+    p_idempotency_key: idempotencyKey,
+    p_request_digest: requestDigest,
+    p_reserve_fitcoin: reserveFitcoin,
+  });
+  if (error) throw new Error(`Fitcoin rezervasyonu yapılamadı: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error("Fitcoin rezervasyonu boş yanıt döndü.");
+  const value = row as Record<string, unknown>;
+  return {
+    analysis_run_id: String(value.analysis_run_id),
+    run_status: value.run_status as AnalysisRun["status"],
+    sufficient: Boolean(value.sufficient),
+    replayed: Boolean(value.replayed),
+    available_fitcoin: toNumber(value.available_fitcoin),
+    reserved_fitcoin: toNumber(value.reserved_fitcoin),
+    reserved_amount_fitcoin: toNumber(value.reserved_amount_fitcoin),
+  };
+}
+
+export async function claimAnalysis(accountId: string, runId: string): Promise<{ claimed: boolean; run_status: AnalysisRun["status"] }> {
+  assertAccountId(accountId);
+  const { data, error } = await supabase().rpc("fitcoin_claim_analysis", {
+    p_account_id: accountId,
+    p_analysis_run_id: runId,
+  });
+  if (error) throw new Error(`Analiz başlatılamadı: ${error.message}`);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error("Analiz başlatma yanıtı boş.");
+  return { claimed: Boolean(row.claimed), run_status: row.run_status as AnalysisRun["status"] };
+}
+
+export type FinalizedAnalysis = {
+  entry_id: string | null;
+  run_status: AnalysisRun["status"];
+  charged_fitcoin: number;
+  available_fitcoin: number;
+  reserved_fitcoin: number;
+};
+
+/**
+ * Atomic success path for `/api/analyze`: receipt evidence, optional scoped
+ * entry, wallet settlement, run result, and immutable ledger move together.
+ */
+export async function finalizeAnalysis(
+  accountId: string,
+  runId: string,
+  chargedFitcoin: number,
+  entry: NewEntry | null,
+  receipts: UsageReceiptInput[],
+  result: unknown,
+  providerCostStatus = "recorded",
+): Promise<FinalizedAnalysis> {
+  assertAccountId(accountId);
+  let entryPayload: Record<string, unknown> | null = null;
+  if (entry) {
+    if (entry.image_path) assertObjectPath(accountId, entry.image_path);
+    const { image_url, ...privateEntry } = entry;
+    void image_url;
+    entryPayload = privateEntry;
+  }
+  const { data, error } = await supabase().rpc("fitcoin_finalize_analysis", {
+    p_account_id: accountId,
+    p_analysis_run_id: runId,
+    p_charged_fitcoin: chargedFitcoin,
+    p_entry: entryPayload,
+    p_receipts: receipts,
+    p_result_json: result,
+    p_provider_cost_status: providerCostStatus,
+  });
+  if (error) throw new Error(`Analiz sonucu kaydedilemedi: ${error.message}`);
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+  if (!row) throw new Error("Analiz sonuçlandırma yanıtı boş.");
+  return {
+    entry_id: row.entry_id ? String(row.entry_id) : null,
+    run_status: row.run_status as AnalysisRun["status"],
+    charged_fitcoin: toNumber(row.charged_fitcoin),
+    available_fitcoin: toNumber(row.available_fitcoin),
+    reserved_fitcoin: toNumber(row.reserved_fitcoin),
+  };
+}
+
+export async function failAnalysis(
+  accountId: string,
+  runId: string,
+  errorMessage: string,
+  providerCostStatus = "not_charged",
+): Promise<{ run_status: AnalysisRun["status"]; available_fitcoin: number; reserved_fitcoin: number }> {
+  assertAccountId(accountId);
+  const { data, error } = await supabase().rpc("fitcoin_fail_analysis", {
+    p_account_id: accountId,
+    p_analysis_run_id: runId,
+    p_error: errorMessage,
+    p_provider_cost_status: providerCostStatus,
+  });
+  if (error) throw new Error(`Fitcoin rezervasyonu iade edilemedi: ${error.message}`);
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+  if (!row) throw new Error("Fitcoin iade yanıtı boş.");
+  return {
+    run_status: row.run_status as AnalysisRun["status"],
+    available_fitcoin: toNumber(row.available_fitcoin),
+    reserved_fitcoin: toNumber(row.reserved_fitcoin),
+  };
+}
+
+export type UsageReceiptInput = {
+  stage: "parse" | "research";
+  response_id?: string | null;
+  requested_model: string;
+  model: string;
+  tool_type?: string | null;
+  input_tokens?: number;
+  cached_input_tokens?: number;
+  cache_write_input_tokens?: number;
+  output_tokens?: number;
+  reasoning_tokens?: number;
+  total_tokens?: number;
+  web_search_calls?: number;
+  cost_nano_usd: number;
+  fitcoin_units: number;
+  rate_card_version: string;
+  metadata?: Record<string, unknown>;
+};

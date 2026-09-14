@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import {
-  createAccount, createSession, findByPhone, normalizePhone,
-  parseProfile, publicAccount, SESSION_COOKIE,
+  assertSessionConfiguration, createAccount, createSession, DuplicatePhoneError,
+  normalizePhone, parseProfile, passwordError, publicAccount, SESSION_COOKIE,
+  SessionConfigurationError, SignupRateLimitError, signupRateKey,
 } from "@/lib/accounts";
-import { isTheme } from "@/lib/theme";
 import { supabaseConfigured } from "@/lib/store";
+import { requestIp } from "@/lib/request-ip";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Depolama yapılandırılmamış." }, { status: 503 });
   }
 
-  let body: { phone?: string; password?: string; profile?: unknown; theme?: string };
+  let body: { phone?: string; password?: string; profile?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -25,23 +26,22 @@ export async function POST(req: Request) {
   if (!phone) return NextResponse.json({ error: "Telefon numarası geçersiz." }, { status: 400 });
 
   const password = String(body.password || "");
-  if (password.length < 8) {
-    return NextResponse.json({ error: "Şifre en az 8 karakter olmalı." }, { status: 400 });
-  }
+  const invalidPassword = passwordError(password);
+  if (invalidPassword) return NextResponse.json({ error: invalidPassword }, { status: 400 });
 
   const parsed = parseProfile(body.profile);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
   try {
-    if (await findByPhone(phone)) {
-      return NextResponse.json({ error: "Bu numarayla bir hesap zaten var." }, { status: 409 });
-    }
+    // Fail before creating a row: a production account must never be left
+    // behind without a cryptographically configured session issuer.
+    assertSessionConfiguration();
 
     const account = await createAccount({
       phone,
       password,
       profile: parsed.profile,
-      theme: isTheme(body.theme) ? body.theme : undefined,
+      signupIpHash: signupRateKey(`ip:${requestIp(req)}`),
     });
 
     const session = createSession(account.id);
@@ -55,6 +55,11 @@ export async function POST(req: Request) {
     });
     return res;
   } catch (e) {
+    if (e instanceof DuplicatePhoneError) return NextResponse.json({ error: e.message }, { status: 409 });
+    if (e instanceof SignupRateLimitError) {
+      return NextResponse.json({ error: e.message }, { status: 429, headers: { "Retry-After": "86400" } });
+    }
+    if (e instanceof SessionConfigurationError) return NextResponse.json({ error: e.message }, { status: 503 });
     console.error("[fitmatik] sign-up:", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "Hesap oluşturulamadı. Tekrar dene." }, { status: 500 });
   }

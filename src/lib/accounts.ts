@@ -1,15 +1,8 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { getJsonObject, putJsonObject } from "./store";
 import { DEFAULT_THEME, isTheme, type ThemeId } from "./theme";
+import { supabase } from "./store";
 
-/**
- * Hesaplar Supabase Storage'da JSON olarak duruyor:
- *   accounts/by-phone/<E164>.json   -> { id }        (telefon → hesap dizini)
- *   accounts/<id>.json              -> Account       (asıl kayıt)
- *
- * Şifreler scrypt ile tuzlanıp saklanıyor; düz metin hiçbir yere yazılmıyor.
- */
-
+/** Values stored by `app_accounts`; all personal data stays server-side. */
 export type Gender = "kadin" | "erkek" | "belirtmek-istemiyorum";
 
 export type Profile = {
@@ -33,21 +26,50 @@ export type Account = {
   updated_at: string;
 };
 
-/** Hesabın istemciye gidebilecek hâli — şifre alanı asla dışarı çıkmaz. */
+/** Account data safe to send to a signed-in browser. */
 export type PublicAccount = Omit<Account, "password">;
 
-export const publicAccount = (a: Account): PublicAccount => {
-  const { password: _password, ...rest } = a;
-  return rest;
+export const publicAccount = (account: Account): PublicAccount => {
+  const { password, ...safe } = account;
+  void password;
+  return safe;
 };
 
+class AccountStoreError extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+    this.name = "AccountStoreError";
+  }
+}
+
+export class DuplicatePhoneError extends Error {
+  constructor() {
+    super("Bu numarayla bir hesap zaten var.");
+    this.name = "DuplicatePhoneError";
+  }
+}
+
+export class SignupRateLimitError extends Error {
+  constructor() {
+    super("Kayıt denemesi sınırına ulaşıldı. Lütfen 24 saat sonra tekrar dene.");
+    this.name = "SignupRateLimitError";
+  }
+}
+
+export class SignInRateLimitError extends Error {
+  constructor() {
+    super("Çok fazla giriş denemesi yapıldı. Lütfen 15 dakika sonra tekrar dene.");
+    this.name = "SignInRateLimitError";
+  }
+}
+
 /* ------------------------------------------------------------------ */
-/* Telefon                                                             */
+/* Phone and password validation                                       */
 /* ------------------------------------------------------------------ */
 
 /**
- * Türkiye numaralarını E.164'e çevirir: "0555 123 45 67", "5551234567",
- * "+90 555 123 45 67" hepsi "+905551234567" olur.
+ * Canonicalizes Turkish phone numbers to E.164. Other valid E.164-shaped
+ * numbers remain valid so that server and client never disagree about input.
  */
 export function normalizePhone(input: string): string | null {
   const raw = (input || "").replace(/[^\d+]/g, "");
@@ -58,28 +80,33 @@ export function normalizePhone(input: string): string | null {
   if (digits.startsWith("0")) digits = digits.slice(1);
   if (digits.length === 10 && digits.startsWith("5")) digits = `90${digits}`;
 
-  // Türkiye: 90 + 10 hane. Diğer ülkeler için makul bir aralık bırakıyoruz.
   if (!/^\d{10,15}$/.test(digits)) return null;
   if (digits.startsWith("90") && digits.length !== 12) return null;
   return `+${digits}`;
 }
 
-/* ------------------------------------------------------------------ */
-/* Şifre                                                               */
-/* ------------------------------------------------------------------ */
+/** Only ASCII letters and digits are accepted; special-character rules are deliberately absent. */
+export function passwordError(password: string): string | null {
+  if (!/^[A-Za-z0-9]{8,128}$/.test(password)) {
+    return "Şifre 8–128 karakter arasında olmalı ve yalnızca harf ile rakam içermeli.";
+  }
+  return null;
+}
 
 const KEYLEN = 64;
 
 export function hashPassword(password: string): { salt: string; hash: string } {
+  const invalid = passwordError(password);
+  if (invalid) throw new Error(invalid);
   const salt = randomBytes(16).toString("hex");
   return { salt, hash: scryptSync(password, salt, KEYLEN).toString("hex") };
 }
 
 export function verifyPassword(password: string, stored: Account["password"]): boolean {
+  if (passwordError(password)) return false;
   try {
     const attempt = scryptSync(password, stored.salt, KEYLEN);
     const known = Buffer.from(stored.hash, "hex");
-    // Uzunluk farklıysa timingSafeEqual fırlatır; önce onu ele.
     return known.length === attempt.length && timingSafeEqual(known, attempt);
   } catch {
     return false;
@@ -87,15 +114,40 @@ export function verifyPassword(password: string, stored: Account["password"]): b
 }
 
 /* ------------------------------------------------------------------ */
-/* Oturum çerezi — imzalı, sunucu tarafında doğrulanıyor                */
+/* Signed session                                                      */
 /* ------------------------------------------------------------------ */
 
 export const SESSION_COOKIE = "fm_session";
 const SESSION_DAYS = 180;
+const DEVELOPMENT_SECRET = "fitmatik-development-session-secret-not-for-production";
 
-const secret = () => process.env.APP_SECRET || "fitmatik-gelistirme";
+export class SessionConfigurationError extends Error {
+  constructor() {
+    super("APP_SECRET üretimde en az 32 baytlık sabit bir değer olmalı.");
+    this.name = "SessionConfigurationError";
+  }
+}
 
-const sign = (payload: string) => createHmac("sha256", secret()).update(payload).digest("hex");
+function sessionSecret(): string {
+  const configured = process.env.APP_SECRET?.trim();
+  if (configured && Buffer.byteLength(configured, "utf8") >= 32) return configured;
+  if (process.env.NODE_ENV === "production") throw new SessionConfigurationError();
+  return DEVELOPMENT_SECRET;
+}
+
+/** Use in authentication routes before mutating an account in production. */
+export function assertSessionConfiguration(): void {
+  sessionSecret();
+}
+
+/** HMAC keys let Postgres enforce a durable limit without retaining raw IPs. */
+export function signupRateKey(subject: string): string {
+  return createHmac("sha256", sessionSecret())
+    .update(`fitmatik:signup-rate-limit:v1:${subject}`)
+    .digest("hex");
+}
+
+const sign = (payload: string) => createHmac("sha256", sessionSecret()).update(payload).digest("hex");
 
 export function createSession(userId: string): { value: string; maxAge: number } {
   const exp = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
@@ -105,85 +157,205 @@ export function createSession(userId: string): { value: string; maxAge: number }
 
 export function readSession(cookie: string | undefined): string | null {
   if (!cookie) return null;
-  const parts = cookie.split(".");
-  if (parts.length !== 3) return null;
-  const [userId, expStr, sig] = parts;
-  const payload = `${userId}.${expStr}`;
-
-  const expected = sign(payload);
-  if (sig.length !== expected.length) return null;
-  if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-
-  const exp = Number(expStr);
-  if (!Number.isFinite(exp) || Date.now() > exp) return null;
-  return userId;
+  try {
+    const parts = cookie.split(".");
+    if (parts.length !== 3) return null;
+    const [userId, expStr, signature] = parts;
+    // Account IDs are UUIDs. Rejecting malformed claims also prevents an
+    // arbitrary string from ever reaching the database query.
+    if (!UUID.test(userId)) return null;
+    const payload = `${userId}.${expStr}`;
+    const expected = sign(payload);
+    if (signature.length !== expected.length) return null;
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+    const exp = Number(expStr);
+    return Number.isFinite(exp) && Date.now() <= exp ? userId : null;
+  } catch {
+    // A production server without APP_SECRET must reject rather than accept
+    // any cookie. Authentication endpoints surface configuration failure.
+    return null;
+  }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /* ------------------------------------------------------------------ */
-/* Depolama                                                            */
+/* Postgres account mapping                                            */
 /* ------------------------------------------------------------------ */
 
-const accountPath = (id: string) => `accounts/${id}.json`;
-const phoneIndexPath = (phone: string) => `accounts/by-phone/${encodeURIComponent(phone)}.json`;
+type AccountRow = {
+  id: string;
+  phone: string;
+  password_salt: string;
+  password_hash: string;
+  name: string;
+  age: number | string;
+  height_cm: number | string;
+  weight_kg: number | string;
+  gender: string;
+  theme: string;
+  target_kcal: number | string;
+  target_protein_g: number | string;
+  target_carbs_g: number | string;
+  target_fat_g: number | string;
+  created_at: string;
+  updated_at: string;
+};
+
+const numeric = (value: number | string): number => Number(value);
+
+function fromRow(row: AccountRow): Account {
+  const gender: Gender = ["kadin", "erkek", "belirtmek-istemiyorum"].includes(row.gender)
+    ? (row.gender as Gender)
+    : "belirtmek-istemiyorum";
+  return {
+    id: row.id,
+    phone: row.phone,
+    password: { salt: row.password_salt, hash: row.password_hash },
+    profile: {
+      name: row.name,
+      age: numeric(row.age),
+      heightCm: numeric(row.height_cm),
+      weightKg: numeric(row.weight_kg),
+      gender,
+    },
+    theme: isTheme(row.theme) ? row.theme : DEFAULT_THEME,
+    targets: {
+      kcal: numeric(row.target_kcal),
+      protein_g: numeric(row.target_protein_g),
+      carbs_g: numeric(row.target_carbs_g),
+      fat_g: numeric(row.target_fat_g),
+    },
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function accountError(error: { message: string; code?: string } | null, fallback: string): never {
+  throw new AccountStoreError(error?.message || fallback, error?.code);
+}
 
 export const DEFAULT_TARGETS: Targets = { kcal: 2400, protein_g: 150, carbs_g: 250, fat_g: 80 };
 
 export async function findByPhone(phone: string): Promise<Account | null> {
-  const idx = await getJsonObject<{ id: string }>(phoneIndexPath(phone));
-  return idx?.id ? getAccount(idx.id) : null;
+  const { data, error } = await supabase()
+    .from("app_accounts")
+    .select("*")
+    .eq("phone", phone)
+    .maybeSingle();
+  if (error) accountError(error, "Hesap bulunamadı.");
+  return data ? fromRow(data as AccountRow) : null;
 }
 
-export const getAccount = (id: string) => getJsonObject<Account>(accountPath(id));
+export async function getAccount(id: string): Promise<Account | null> {
+  if (!UUID.test(id)) return null;
+  const { data, error } = await supabase()
+    .from("app_accounts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) accountError(error, "Hesap okunamadı.");
+  return data ? fromRow(data as AccountRow) : null;
+}
 
-/** Kaydeder ve YAZILAN hâli döndürür — çağıran taze `updated_at`'i görebilsin. */
+/** Update only the account row belonging to the signed-in user. */
 export async function saveAccount(account: Account): Promise<Account> {
-  const saved: Account = { ...account, updated_at: new Date().toISOString() };
-  await putJsonObject(accountPath(saved.id), saved);
-  return saved;
+  const { data, error } = await supabase()
+    .from("app_accounts")
+    .update({
+      password_salt: account.password.salt,
+      password_hash: account.password.hash,
+      name: account.profile.name,
+      age: account.profile.age,
+      height_cm: account.profile.heightCm,
+      weight_kg: account.profile.weightKg,
+      gender: account.profile.gender,
+      theme: account.theme,
+      target_kcal: account.targets.kcal,
+      target_protein_g: account.targets.protein_g,
+      target_carbs_g: account.targets.carbs_g,
+      target_fat_g: account.targets.fat_g,
+    })
+    .eq("id", account.id)
+    .select("*")
+    .single();
+  if (error) accountError(error, "Hesap kaydedilemedi.");
+  return fromRow(data as AccountRow);
 }
 
+/**
+ * RPC performs account, wallet, and the one-time 5,000 FC grant in one
+ * database transaction. A phone uniqueness race becomes a normal 409 route
+ * response rather than two partially-created accounts.
+ */
 export async function createAccount(input: {
   phone: string;
   password: string;
   profile: Profile;
   theme?: ThemeId;
+  signupIpHash: string;
 }): Promise<Account> {
-  const now = new Date().toISOString();
-  const account: Account = {
-    id: crypto.randomUUID(),
-    phone: input.phone,
-    password: hashPassword(input.password),
-    profile: input.profile,
-    theme: isTheme(input.theme) ? input.theme : DEFAULT_THEME,
-    targets: suggestTargets(input.profile),
-    created_at: now,
-    updated_at: now,
-  };
-  await putJsonObject(accountPath(account.id), account);
-  await putJsonObject(phoneIndexPath(account.phone), { id: account.id });
-  return account;
+  const password = hashPassword(input.password);
+  const targets = suggestTargets(input.profile);
+  const { data, error } = await supabase()
+    .rpc("create_app_account", {
+      p_phone: input.phone,
+      p_password_salt: password.salt,
+      p_password_hash: password.hash,
+      p_name: input.profile.name,
+      p_age: input.profile.age,
+      p_height_cm: input.profile.heightCm,
+      p_weight_kg: input.profile.weightKg,
+      p_gender: input.profile.gender,
+      // Sign-up no longer selects a theme. New accounts always start from the
+      // black/neon-green theme; users can change it later in Settings.
+      p_theme: "siyah",
+      p_target_kcal: targets.kcal,
+      p_target_protein_g: targets.protein_g,
+      p_target_carbs_g: targets.carbs_g,
+      p_target_fat_g: targets.fat_g,
+      p_signup_ip_hash: input.signupIpHash,
+      p_phone_rate_hash: signupRateKey(`phone:${input.phone}`),
+    })
+    .single();
+  if (error?.code === "23505") throw new DuplicatePhoneError();
+  if (error?.message.includes("signup_rate_limited")) throw new SignupRateLimitError();
+  if (error) accountError(error, "Hesap oluşturulamadı.");
+  return fromRow(data as AccountRow);
+}
+
+/**
+ * Password doğrulamasından önce çağrılan, yalnızca HMAClenmiş IP/telefon
+ * anahtarları saklayan kalıcı online giriş limiti.
+ */
+export async function consumeSignInRateLimit(input: { ip: string; phone: string }): Promise<void> {
+  const { error } = await supabase().rpc("consume_signin_rate_limit", {
+    p_ip_hash: signupRateKey(`ip:${input.ip}`),
+    p_phone_hash: signupRateKey(`phone:${input.phone}`),
+  });
+  if (error?.message.includes("signin_rate_limited")) throw new SignInRateLimitError();
+  if (error) accountError(error, "Giriş denemesi kaydedilemedi.");
 }
 
 /* ------------------------------------------------------------------ */
-/* Doğrulama ve hedef önerisi                                          */
+/* Profile and target validation                                       */
 /* ------------------------------------------------------------------ */
 
-const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : NaN);
+const numberValue = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : Number.NaN);
 
-/** Girdiyi profile çevirir; hata varsa mesajını döndürür. */
 export function parseProfile(raw: unknown): { profile: Profile } | { error: string } {
-  const p = (raw || {}) as Record<string, unknown>;
-  const name = String(p.name ?? "").trim();
-  const age = num(p.age);
-  const heightCm = num(p.heightCm);
-  const weightKg = num(p.weightKg);
-  const gender = String(p.gender ?? "");
+  const profile = (raw || {}) as Record<string, unknown>;
+  const name = String(profile.name ?? "").trim();
+  const age = numberValue(profile.age);
+  const heightCm = numberValue(profile.heightCm);
+  const weightKg = numberValue(profile.weightKg);
+  const gender = String(profile.gender ?? "");
 
   if (name.length < 2) return { error: "İsim en az 2 harf olmalı." };
   if (!(age >= 10 && age <= 100)) return { error: "Yaş 10 ile 100 arasında olmalı." };
   if (!(heightCm >= 100 && heightCm <= 250)) return { error: "Boy 100 ile 250 cm arasında olmalı." };
-  if (!(weightKg >= 25 && weightKg <= 300)) return { error: "Kilo 25 ile 300 kg arasında olmalı." };
-  if (!["kadin", "erkek", "belirtmek-istemiyorum"].includes(gender)) {
+  if (!(weightKg >= 25 && weightKg <= 350)) return { error: "Kilo 25 ile 350 kg arasında olmalı." };
+  if (!(["kadin", "erkek", "belirtmek-istemiyorum"] as string[]).includes(gender)) {
     return { error: "Cinsiyet seçilmeli." };
   }
 
@@ -199,32 +371,26 @@ export function parseProfile(raw: unknown): { profile: Profile } | { error: stri
 }
 
 export function parseTargets(raw: unknown): Targets {
-  const t = (raw || {}) as Record<string, unknown>;
-  const pick = (v: unknown, fallback: number, max: number) => {
-    const n = num(v);
-    return n > 0 && n <= max ? Math.round(n) : fallback;
+  const targets = (raw || {}) as Record<string, unknown>;
+  const pick = (value: unknown, fallback: number, max: number) => {
+    const parsed = numberValue(value);
+    return parsed > 0 && parsed <= max ? Math.round(parsed) : fallback;
   };
   return {
-    kcal: pick(t.kcal, DEFAULT_TARGETS.kcal, 10_000),
-    protein_g: pick(t.protein_g, DEFAULT_TARGETS.protein_g, 500),
-    carbs_g: pick(t.carbs_g, DEFAULT_TARGETS.carbs_g, 1000),
-    fat_g: pick(t.fat_g, DEFAULT_TARGETS.fat_g, 400),
+    kcal: pick(targets.kcal, DEFAULT_TARGETS.kcal, 10_000),
+    protein_g: pick(targets.protein_g, DEFAULT_TARGETS.protein_g, 500),
+    carbs_g: pick(targets.carbs_g, DEFAULT_TARGETS.carbs_g, 1000),
+    fat_g: pick(targets.fat_g, DEFAULT_TARGETS.fat_g, 400),
   };
 }
 
-/**
- * Kayıt sırasında makul bir başlangıç hedefi üretir (Mifflin-St Jeor, hafif
- * aktif çarpanı). Kullanıcı ayarlardan değiştirebiliyor; amaç sıfırdan
- * başlatmamak.
- */
-export function suggestTargets(p: Profile): Targets {
-  const base = 10 * p.weightKg + 6.25 * p.heightCm - 5 * p.age;
-  const bmr = p.gender === "erkek" ? base + 5 : p.gender === "kadin" ? base - 161 : base - 78;
+export function suggestTargets(profile: Profile): Targets {
+  const base = 10 * profile.weightKg + 6.25 * profile.heightCm - 5 * profile.age;
+  const bmr = profile.gender === "erkek" ? base + 5 : profile.gender === "kadin" ? base - 161 : base - 78;
   const kcal = Math.round((bmr * 1.375) / 10) * 10;
-
   return {
     kcal,
-    protein_g: Math.round(p.weightKg * 1.8),
+    protein_g: Math.round(profile.weightKg * 1.8),
     carbs_g: Math.round((kcal * 0.45) / 4),
     fat_g: Math.round((kcal * 0.28) / 9),
   };

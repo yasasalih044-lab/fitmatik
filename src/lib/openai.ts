@@ -1,6 +1,22 @@
 import { gramsFromText, lookupBarcode, scaleToGrams, searchProducts, type FoodFact } from "./foodDb";
 import * as fs from "./fatsecret";
-import type { AnalyzeResult, Basis, FoodItem, Source, TokenUsage, WebSource } from "./types";
+import {
+  MAX_ANALYSIS_WEB_SEARCH_CALLS,
+  MAX_PARSE_OUTPUT_TOKENS,
+  MAX_RESEARCH_OUTPUT_TOKENS,
+} from "./billing";
+import type {
+  AnalysisStage,
+  AnalysisUsage,
+  AnalyzeResult,
+  Basis,
+  DetailedTokenUsage,
+  FoodItem,
+  OpenAIUsageReceipt,
+  Source,
+  WebSearchTool,
+  WebSource,
+} from "./types";
 
 const OPENAI_URL = "https://api.openai.com/v1/responses";
 
@@ -9,10 +25,14 @@ export const MODEL = process.env.OPENAI_MODEL || "gpt-5-mini";
 export class OpenAIError extends Error {
   code: string;
   status: number;
-  constructor(message: string, code = "openai_error", status = 502) {
+  /** Sağlayıcı yanıtı geldiyse, başarısız iş kuralında bile tahsilat için korunur. */
+  receipt?: OpenAIUsageReceipt;
+
+  constructor(message: string, code = "openai_error", status = 502, receipt?: OpenAIUsageReceipt) {
     super(message);
     this.code = code;
     this.status = status;
+    this.receipt = receipt;
   }
 }
 
@@ -24,15 +44,23 @@ type ResponsesBody = {
   text?: { format: unknown };
   tools?: unknown[];
   tool_choice?: string;
+  max_tool_calls?: number;
   max_output_tokens?: number;
 };
 
+export type ExtractedOpenAIResponse = { text: string; citations: WebSource[]; receipt: OpenAIUsageReceipt };
+export type OpenAIResponseExtractionContext = {
+  stage: AnalysisStage;
+  requested_model: string;
+  web_search_tool: WebSearchTool | null;
+};
+
 /** Responses API çağrısı; web_search aracı desteklenmiyorsa aşamalı olarak geri düşer. */
-async function callOpenAI(body: ResponsesBody, withSearch: boolean): Promise<{ text: string; citations: WebSource[]; usage: TokenUsage }> {
+async function callOpenAI(body: ResponsesBody, withSearch: boolean, stage: AnalysisStage): Promise<ExtractedOpenAIResponse> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new OpenAIError("OPENAI_API_KEY tanımlı değil.", "missing_key", 500);
 
-  const searchVariants = withSearch ? ["web_search", "web_search_preview", null] : [null];
+  const searchVariants: Array<WebSearchTool | null> = withSearch ? ["web_search", "web_search_preview", null] : [null];
   let lastErr: OpenAIError | null = null;
 
   for (const variant of searchVariants) {
@@ -43,6 +71,7 @@ async function callOpenAI(body: ResponsesBody, withSearch: boolean): Promise<{ t
     } else {
       delete payload.tools;
       delete payload.tool_choice;
+      delete payload.max_tool_calls;
     }
 
     const res = await fetch(OPENAI_URL, {
@@ -73,27 +102,95 @@ async function callOpenAI(body: ResponsesBody, withSearch: boolean): Promise<{ t
       continue;
     }
 
-    return extractText(data);
+    return extractOpenAIResponse(data, {
+      stage,
+      requested_model: body.model,
+      web_search_tool: variant,
+    });
   }
 
   throw lastErr ?? new OpenAIError("OpenAI çağrısı başarısız.");
 }
 
-const noUsage = (): TokenUsage => ({ input: 0, output: 0, total: 0 });
-const addUsage = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
-  input: a.input + b.input,
-  output: a.output + b.output,
-  total: a.total + b.total,
-});
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 
-function extractText(data: Record<string, unknown>): { text: string; citations: WebSource[]; usage: TokenUsage } {
-  const output = (data.output as unknown[]) || [];
-  const u = (data.usage || {}) as Record<string, unknown>;
-  const usage: TokenUsage = {
-    input: Number(u.input_tokens) || 0,
-    output: Number(u.output_tokens) || 0,
-    total: Number(u.total_tokens) || (Number(u.input_tokens) || 0) + (Number(u.output_tokens) || 0),
+function nonNegativeInteger(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+/** Provider usage is financial evidence: missing data must never become free use. */
+function requiredNonNegativeInteger(value: unknown, field: string): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new OpenAIError(`OpenAI kullanım makbuzunda ${field} eksik ya da geçersiz.`, "missing_usage", 502);
+  }
+  return parsed;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value ? value : null;
+}
+
+function detailedUsage(data: Record<string, unknown>): DetailedTokenUsage {
+  if (!data.usage || typeof data.usage !== "object" || Array.isArray(data.usage)) {
+    throw new OpenAIError("OpenAI kullanım makbuzu dönmedi.", "missing_usage", 502);
+  }
+  const rawUsage = asRecord(data.usage);
+  const inputDetails = asRecord(rawUsage.input_tokens_details);
+  const outputDetails = asRecord(rawUsage.output_tokens_details);
+  const input = requiredNonNegativeInteger(rawUsage.input_tokens, "input_tokens");
+  const output = requiredNonNegativeInteger(rawUsage.output_tokens, "output_tokens");
+  const suppliedTotal = requiredNonNegativeInteger(rawUsage.total_tokens, "total_tokens");
+  const cachedInput = nonNegativeInteger(inputDetails.cached_tokens);
+  if (cachedInput > input || suppliedTotal < input + output) {
+    throw new OpenAIError("OpenAI kullanım makbuzu tutarsız.", "invalid_usage", 502);
+  }
+
+  return {
+    input,
+    cached_input: cachedInput,
+    cache_write_input: nonNegativeInteger(inputDetails.cache_write_tokens ?? inputDetails.cache_write_input_tokens),
+    output,
+    reasoning: nonNegativeInteger(outputDetails.reasoning_tokens),
+    total: suppliedTotal,
   };
+}
+
+function countExecutedWebSearches(output: unknown[]): number {
+  return output.reduce<number>((count, rawItem) => {
+    const item = asRecord(rawItem);
+    const action = asRecord(item.action);
+    return item.type === "web_search_call" && action.type === "search" ? count + 1 : count;
+  }, 0);
+}
+
+function aggregateUsage(receipts: readonly OpenAIUsageReceipt[]): AnalysisUsage {
+  const totals = receipts.reduce(
+    (sum, receipt) => ({
+      input: sum.input + receipt.usage.input,
+      cached_input: sum.cached_input + receipt.usage.cached_input,
+      cache_write_input: sum.cache_write_input + receipt.usage.cache_write_input,
+      output: sum.output + receipt.usage.output,
+      reasoning: sum.reasoning + receipt.usage.reasoning,
+      total: sum.total + receipt.usage.total,
+      web_searches: sum.web_searches + receipt.web_searches,
+    }),
+    { input: 0, cached_input: 0, cache_write_input: 0, output: 0, reasoning: 0, total: 0, web_searches: 0 },
+  );
+
+  return { ...totals, stages: [...receipts] };
+}
+
+/**
+ * Responses API nesnesini metin + denetlenebilir kullanım makbuzuna dönüştürür.
+ * Export edilmiştir; canlı OpenAI çağrısı yapmadan fixture tabanlı test edilebilir.
+ */
+export function extractOpenAIResponse(data: Record<string, unknown>, context: OpenAIResponseExtractionContext): ExtractedOpenAIResponse {
+  const output = Array.isArray(data.output) ? data.output : [];
+  const usage = detailedUsage(data);
   let text = "";
   const citations: WebSource[] = [];
 
@@ -113,16 +210,39 @@ function extractText(data: Record<string, unknown>): { text: string; citations: 
     }
   }
 
+  const receipt: OpenAIUsageReceipt = {
+    provider: "openai",
+    stage: context.stage,
+    response_id: stringOrNull(data.id),
+    requested_model: context.requested_model,
+    model: stringOrNull(data.model) || context.requested_model,
+    service_tier: stringOrNull(data.service_tier),
+    web_search_tool: context.web_search_tool,
+    web_searches: countExecutedWebSearches(output),
+    usage,
+  };
+
   if (!text.trim()) {
     const status = data.status as string | undefined;
     const incomplete = data.incomplete_details as { reason?: string } | undefined;
     throw new OpenAIError(
       `Model boş yanıt döndü${status ? ` (durum: ${status}${incomplete?.reason ? `/${incomplete.reason}` : ""})` : ""}.`,
       "empty_response",
+      502,
+      receipt,
     );
   }
 
-  return { text, citations, usage };
+  return { text, citations, receipt };
+}
+
+function parseJsonWithReceipt<T>(text: string, label: string, receipt: OpenAIUsageReceipt): T {
+  try {
+    return parseJson<T>(text, label);
+  } catch (error) {
+    if (error instanceof OpenAIError && !error.receipt) error.receipt = receipt;
+    throw error;
+  }
 }
 
 function parseJson<T>(text: string, label: string): T {
@@ -247,7 +367,7 @@ Kabul edilen görselde:
 - grams_est: tüketilen gram. Kullanıcı "yarısını yedim" dediyse ambalaj gramajının yarısı.
 - Yalnızca JSON döndür.`;
 
-async function stage1Parse(opts: { source: Source; text?: string; imageDataUrl?: string }): Promise<{ parsed: ParseOut; usage: TokenUsage }> {
+async function stage1Parse(opts: { source: Source; text?: string; imageDataUrl?: string }): Promise<{ parsed: ParseOut; receipt: OpenAIUsageReceipt }> {
   const content: unknown[] = [];
 
   if (opts.source === "image") {
@@ -262,19 +382,20 @@ async function stage1Parse(opts: { source: Source; text?: string; imageDataUrl?:
     content.push({ type: "input_text", text: opts.text || "" });
   }
 
-  const { text, usage } = await callOpenAI(
+  const { text, receipt } = await callOpenAI(
     {
       model: MODEL,
       instructions: opts.source === "image" ? PARSE_IMAGE_INSTRUCTIONS : PARSE_TEXT_INSTRUCTIONS,
       input: [{ role: "user", content }],
       reasoning: { effort: "low" },
       text: { format: PARSE_SCHEMA },
-      max_output_tokens: 4000,
+      max_output_tokens: MAX_PARSE_OUTPUT_TOKENS,
     },
     false,
+    "parse",
   );
 
-  return { parsed: parseJson<ParseOut>(text, "Ayrıştırma"), usage };
+  return { parsed: parseJsonWithReceipt<ParseOut>(text, "Ayrıştırma", receipt), receipt };
 }
 
 /* ------------------------------------------------------------------ */
@@ -407,8 +528,9 @@ async function stage2Research(
   parsed: ParseOut,
   source: Source,
   facts: (FoodFact | null)[],
-): Promise<{ out: ResearchOut; citations: WebSource[]; usage: TokenUsage }> {
-  const { text, citations, usage } = await callOpenAI(
+  maximumWebSearchCalls: number,
+): Promise<{ out: ResearchOut; citations: WebSource[]; receipt: OpenAIUsageReceipt }> {
+  const { text, citations, receipt } = await callOpenAI(
     {
       model: MODEL,
       instructions: RESEARCH_INSTRUCTIONS,
@@ -431,12 +553,14 @@ async function stage2Research(
       ],
       reasoning: { effort: "low" },
       text: { format: RESEARCH_SCHEMA },
-      max_output_tokens: 6000,
+      max_output_tokens: MAX_RESEARCH_OUTPUT_TOKENS,
+      max_tool_calls: Math.min(Math.max(Math.floor(maximumWebSearchCalls), 0), MAX_ANALYSIS_WEB_SEARCH_CALLS),
     },
     true,
+    "research",
   );
 
-  return { out: parseJson<ResearchOut>(text, "Araştırma"), citations, usage };
+  return { out: parseJsonWithReceipt<ResearchOut>(text, "Araştırma", receipt), citations, receipt };
 }
 
 /* ------------------------------------------------------------------ */
@@ -676,11 +800,17 @@ function buildVerdict(items: FoodItem[], min: number, max: number, best: number)
   return `${min}-${max} arası söyleniyor ama büyük ihtimalle ${best} kalori.`;
 }
 
-export async function analyzeMeal(opts: { source: Source; text?: string; imageDataUrl?: string }): Promise<AnalyzeResult> {
+export async function analyzeMeal(opts: {
+  source: Source;
+  text?: string;
+  imageDataUrl?: string;
+  maximumWebSearchCalls?: number;
+}): Promise<AnalyzeResult> {
   const started = Date.now();
 
-  const { parsed, usage: parseUsage } = await stage1Parse(opts);
-  let usage = parseUsage;
+  const { parsed, receipt: parseReceipt } = await stage1Parse(opts);
+  const receipts: OpenAIUsageReceipt[] = [parseReceipt];
+  let usage = aggregateUsage(receipts);
 
   if (!parsed.accepted || parsed.items.length === 0) {
     return {
@@ -694,7 +824,7 @@ export async function analyzeMeal(opts: { source: Source; text?: string; imageDa
       confidence: "low",
       verdict: parsed.reject_reason || "Bu girdiden bir öğün çıkaramadım.",
       sources: [],
-      model: MODEL,
+      model: parseReceipt.model,
       elapsed_ms: Date.now() - started,
       usage,
       rejected: { reason: parsed.reject_reason || "Girdi anlaşılamadı." },
@@ -705,8 +835,14 @@ export async function analyzeMeal(opts: { source: Source; text?: string; imageDa
   // araştırmaya bağlayıcı girdi olarak veriyoruz.
   const { facts, ipBlocked } = await lookupFacts(parsed.items);
   if (ipBlocked) console.warn(`[fitmatik] FatSecret IP engeli: ${ipBlocked} — panele ekle.`);
-  const { out, citations, usage: researchUsage } = await stage2Research(parsed, opts.source, facts);
-  usage = addUsage(usage, researchUsage);
+  const { out, citations, receipt: researchReceipt } = await stage2Research(
+    parsed,
+    opts.source,
+    facts,
+    opts.maximumWebSearchCalls ?? MAX_ANALYSIS_WEB_SEARCH_CALLS,
+  );
+  receipts.push(researchReceipt);
+  usage = aggregateUsage(receipts);
 
   const items = (out.items || []).map((it, i) => settleItem(it, parsed.items[i], facts[i] ?? null));
 
@@ -747,7 +883,7 @@ export async function analyzeMeal(opts: { source: Source; text?: string; imageDa
     confidence,
     verdict: buildVerdict(items, kcal_min, kcal_max, kcal_best),
     sources: dedupeSources(dbSources, out.sources || [], citations),
-    model: MODEL,
+    model: researchReceipt.model,
     elapsed_ms: Date.now() - started,
     usage,
   };

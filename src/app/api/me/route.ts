@@ -33,7 +33,10 @@ export async function PUT(req: Request) {
     // Kilo/boy/yaş değişince hedefleri kullanıcı istemedikçe ezmiyoruz.
     if (body.retarget) next.targets = suggestTargets(parsed.profile);
   }
-  if (body.theme !== undefined && isTheme(body.theme)) next.theme = body.theme;
+  if (body.theme !== undefined) {
+    if (!isTheme(body.theme)) return NextResponse.json({ error: "Tema geçersiz." }, { status: 400 });
+    next.theme = body.theme;
+  }
   if (body.targets !== undefined) next.targets = parseTargets(body.targets);
 
   try {

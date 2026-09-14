@@ -35,8 +35,55 @@ export type Macros = {
 
 export type WebSource = { title: string; url: string };
 
-/** Bir analizin OpenAI token maliyeti — arayüzde sağ altta gösterilir. */
-export type TokenUsage = { input: number; output: number; total: number };
+/**
+ * Bir analizin OpenAI token maliyeti. İlk üç alan eski UI sözleşmesidir;
+ * ayrıntılar, eski kayıtlar ve mock'lar bozulmasın diye isteğe bağlıdır.
+ */
+export type TokenUsage = {
+  input: number;
+  output: number;
+  total: number;
+  /** Responses API `input_tokens_details.cached_tokens`. */
+  cached_input?: number;
+  /** Varsa Responses API'nin cache yazım tokenları. Ayrı bir fiyatı olmayabilir. */
+  cache_write_input?: number;
+  /** Responses API `output_tokens_details.reasoning_tokens`. */
+  reasoning?: number;
+};
+
+/** Sağlayıcı yanıtından normalize edilmiş, fiyatlandırmaya hazır kullanım. */
+export type DetailedTokenUsage = Required<TokenUsage>;
+
+export type AnalysisStage = "parse" | "research";
+export type WebSearchTool = "web_search" | "web_search_preview";
+
+/**
+ * Her model çağrısı için saklanacak denetlenebilir kullanım makbuzu.
+ * Bu nesne JSON-serializable tutulur; para/ledger katmanı bunu doğrudan
+ * `ai_usage_receipts` kaydına dönüştürebilir.
+ */
+export type OpenAIUsageReceipt = {
+  provider: "openai";
+  stage: AnalysisStage;
+  /** Responses API `id`; sağlayıcı bunu vermediyse null. */
+  response_id: string | null;
+  /** İstekte gönderilen model alias'ı. */
+  requested_model: string;
+  /** Sağlayıcının yanıtta döndürdüğü model; yoksa requested_model. */
+  model: string;
+  service_tier: string | null;
+  /** İstekte başarıyla kullanılan araç varyantı; araç yoksa null. */
+  web_search_tool: WebSearchTool | null;
+  /** Yalnızca çıktıdaki gerçekten çalışmış `action.type === "search"` sayısı. */
+  web_searches: number;
+  usage: DetailedTokenUsage;
+};
+
+/** Analiz toplamı ve saklanabilir çağrı makbuzları. */
+export type AnalysisUsage = TokenUsage & {
+  web_searches?: number;
+  stages?: OpenAIUsageReceipt[];
+};
 
 export type AnalyzeResult = {
   title: string;
@@ -52,7 +99,7 @@ export type AnalyzeResult = {
   sources: WebSource[];
   model: string;
   elapsed_ms: number;
-  usage: TokenUsage;
+  usage: AnalysisUsage;
   /** Görsel paketli gıda değilse doldurulur */
   rejected?: { reason: string };
 };

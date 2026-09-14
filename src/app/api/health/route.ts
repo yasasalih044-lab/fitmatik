@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { driver, supabaseConfigured } from "@/lib/store";
 import { MODEL } from "@/lib/openai";
 import { configured as fatsecretConfigured, searchFoods, FatSecretIpError } from "@/lib/fatsecret";
+import { assertSessionConfiguration } from "@/lib/accounts";
 
 /** FatSecret'e canlı bir sorgu atıp durumu döndürür — log kazmadan teşhis için. */
 async function fatsecretProbe(): Promise<{ ok: boolean; detail: string }> {
@@ -34,21 +35,30 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const store = await driver().catch(() => "memory" as const);
+  const store = await driver().catch(() => "unavailable" as const);
   const url = new URL(req.url);
-  const outbound_ip = await outboundIp();
+  let sessionConfigured = true;
+  try {
+    assertSessionConfiguration();
+  } catch {
+    sessionConfigured = false;
+  }
   // Canlı sorgu masraflı değil ama her sağlık kontrolünde gerekmiyor: ?probe=1 ile iste.
-  const fatsecret_probe = url.searchParams.get("probe") ? await fatsecretProbe() : undefined;
+  const probe = Boolean(url.searchParams.get("probe"));
+  const fatsecret_probe = probe ? await fatsecretProbe() : undefined;
+  const outbound_ip = probe ? await outboundIp() : undefined;
+  const ok = store === "postgres" && sessionConfigured;
   return NextResponse.json({
-    ok: true,
+    ok,
     app: "fit-matik",
     model: MODEL,
     openai_key: !!process.env.OPENAI_API_KEY,
     supabase: supabaseConfigured(),
     store,
+    session_configured: sessionConfigured,
     fatsecret: fatsecretConfigured(),
     fatsecret_probe,
     outbound_ip,
     time: new Date().toISOString(),
-  });
+  }, { status: ok ? 200 : 503 });
 }
