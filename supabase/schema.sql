@@ -387,6 +387,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_run public.analysis_runs;
   v_wallet public.fitcoin_wallets;
@@ -508,6 +509,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_run public.analysis_runs;
 begin
@@ -545,6 +547,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_run public.analysis_runs;
   v_wallet public.fitcoin_wallets;
@@ -617,6 +620,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_run public.analysis_runs;
   v_wallet public.fitcoin_wallets;
