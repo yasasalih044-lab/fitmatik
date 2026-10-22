@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/* Mavros Studio: siyah zemin, tek bir elektrik moru vurgu. Bileşenler yalnız
+   bu anlamsal renkleri kullanır. */
+:root {
+  --bg: #08080b;
+  --panel: #111116;
+  --panel-2: #18181f;
+  --field: #0d0d12;
+  --line: #25252e;
+  --line-strong: #383845;
+  --ink: #f3f2f7;
+  --muted: #a3a2b3;
+  --faint: #6d6c7c;
+  --accent: #9d8cff;
+  --accent-strong: #c9c0ff;
+  --on-accent: #0c0820;
+  --ok: #7fe0a6;
+  --warn: #ffd06b;
+  --bad: #ff7c83;
+  --accent-wash: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 55%, transparent);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-field: var(--field);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-on-accent: var(--on-accent);
+  --color-accent-wash: var(--accent-wash);
+  --color-accent-border: var(--accent-border);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --font-sans: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), var(--font-ui), ui-sans-serif, sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+    var(--bg);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

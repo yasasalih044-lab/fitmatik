@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Mavros Studio kendi lint ayarıyla ayrı bir uygulama.
+    "studio/**",
   ]),
 ]);
 
